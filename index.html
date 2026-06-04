@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Ormond Turtle Nest Log</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --loggerhead: #F97316;
+      --leatherback: #3B82F6;
+      --green-turtle: #22C55E;
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface2: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #0ea5e9;
+      --danger: #ef4444;
+      --radius: 12px;
+      --header-h: 56px;
+      --tab-h: 56px;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ── Layout ── */
+    #app { display: flex; flex-direction: column; height: 100dvh; }
+
+    header {
+      height: var(--header-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--surface2);
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 16px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    header img { width: 28px; height: 28px; }
+    header h1 { font-size: 17px; font-weight: 700; flex: 1; }
+    header .subtitle { font-size: 11px; color: var(--muted); }
+
+    nav {
+      display: flex;
+      height: var(--tab-h);
+      background: var(--surface);
+      border-top: 1px solid var(--surface2);
+      flex-shrink: 0;
+      order: 99;
+    }
+    nav button {
+      flex: 1; border: none; background: none; color: var(--muted);
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px; transition: color .15s;
+      padding: 0;
+    }
+    nav button .nav-icon { font-size: 20px; line-height: 1; }
+    nav button.active { color: var(--accent); }
+
+    .tab-panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+    .tab-panel.active { display: flex; }
+
+    /* ── Map tab ── */
+    #map { flex: 1; }
+
+    .map-fab {
+      position: absolute;
+      bottom: calc(var(--tab-h) + 16px);
+      right: 16px;
+      z-index: 500;
+      width: 52px; height: 52px;
+      background: var(--accent);
+      color: #fff; font-size: 26px;
+      border: none; border-radius: 50%;
+      box-shadow: 0 4px 14px rgba(0,0,0,.4);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .1s;
+    }
+    .map-fab:active { transform: scale(.93); }
+    .map-fab.placing { background: var(--danger); }
+
+    .placing-hint {
+      position: absolute;
+      top: calc(var(--header-h) + 12px);
+      left: 50%; transform: translateX(-50%);
+      z-index: 500;
+      background: rgba(0,0,0,.75);
+      color: #fff; font-size: 13px; font-weight: 600;
+      padding: 7px 16px; border-radius: 20px;
+      pointer-events: none;
+      display: none;
+      white-space: nowrap;
+    }
+    .placing-hint.visible { display: block; }
+
+    /* Leaflet popup overrides */
+    .leaflet-popup-content-wrapper {
+      background: var(--surface) !important;
+      color: var(--text) !important;
+      border-radius: var(--radius) !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,.5) !important;
+    }
+    .leaflet-popup-tip { background: var(--surface) !important; }
+    .leaflet-popup-content { margin: 12px 14px !important; font-size: 13px; }
+    .popup-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .popup-species { font-size: 12px; color: var(--muted); margin-bottom: 8px; text-transform: capitalize; }
+    .popup-countdown { font-size: 22px; font-weight: 800; }
+    .popup-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .popup-dates { font-size: 12px; color: var(--muted); }
+    .popup-photo { width: 100%; border-radius: 8px; margin-top: 8px; max-height: 120px; object-fit: cover; }
+
+    /* ── List tab ── */
+    #tab-list {
+      flex-direction: column;
+    }
+    .list-header {
+      padding: 12px 16px 8px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .list-header h2 { font-size: 15px; font-weight: 700; }
+    .nest-count { font-size: 12px; color: var(--muted); }
+
+    .species-legend {
+      display: flex; gap: 12px;
+      padding: 0 16px 12px;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; color: var(--muted);
+    }
+    .legend-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+
+    #nest-list {
+      flex: 1; overflow-y: auto;
+      padding: 0 12px 12px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+
+    .nest-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      display: flex; align-items: flex-start; gap: 12px;
+      border-left: 4px solid var(--surface2);
+    }
+    .nest-card.loggerhead { border-left-color: var(--loggerhead); }
+    .nest-card.leatherback { border-left-color: var(--leatherback); }
+    .nest-card.green { border-left-color: var(--green-turtle); }
+
+    .nest-card-thumb {
+      width: 52px; height: 52px; border-radius: 8px;
+      object-fit: cover; flex-shrink: 0;
+      background: var(--surface2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 26px;
+    }
+    .nest-card-body { flex: 1; min-width: 0; }
+    .nest-card-title { font-size: 14px; font-weight: 700; }
+    .nest-card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; text-transform: capitalize; }
+    .nest-card-dates { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+    .days-badge {
+      flex-shrink: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 6px 10px;
+      min-width: 52px;
+      text-align: center;
+    }
+    .days-badge .days-num { font-size: 20px; font-weight: 800; line-height: 1; }
+    .days-badge .days-label { font-size: 9px; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+    .days-badge.hatched { background: #14532d; }
+    .days-badge.hatched .days-num { font-size: 13px; }
+    .days-badge.soon { background: #7c2d12; }
+
+    .nest-card-actions {
+      display: flex; gap: 8px; margin-top: 8px;
+    }
+    .btn-share, .btn-delete {
+      font-size: 11px; font-weight: 600; border: none;
+      border-radius: 6px; padding: 5px 10px; cursor: pointer;
+    }
+    .btn-share { background: var(--surface2); color: var(--text); }
+    .btn-delete { background: transparent; color: var(--danger); }
+
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; color: var(--muted); text-align: center;
+      padding: 32px;
+    }
+    .empty-state .empty-icon { font-size: 48px; }
+    .empty-state p { font-size: 14px; }
+
+    /* ── Add Form tab ── */
+    #tab-add { overflow-y: auto; }
+    .form-wrap { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .form-title { font-size: 17px; font-weight: 700; }
+
+    label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
+    input, select, textarea {
+      width: 100%; padding: 11px 14px;
+      background: var(--surface); border: 1px solid var(--surface2);
+      border-radius: 10px; color: var(--text); font-size: 15px;
+      -webkit-appearance: none; appearance: none;
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+    select option { background: var(--surface); }
+    textarea { resize: vertical; min-height: 80px; font-size: 14px; }
+
+    .species-picker { display: flex; gap: 8px; }
+    .species-btn {
+      flex: 1; padding: 10px 6px; border-radius: 10px;
+      border: 2px solid var(--surface2);
+      background: var(--surface); color: var(--muted);
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      text-align: center; transition: all .15s;
+    }
+    .species-btn.selected-loggerhead { border-color: var(--loggerhead); color: var(--loggerhead); background: rgba(249,115,22,.1); }
+    .species-btn.selected-leatherback { border-color: var(--leatherback); color: var(--leatherback); background: rgba(59,130,246,.1); }
+    .species-btn.selected-green { border-color: var(--green-turtle); color: var(--green-turtle); background: rgba(34,197,94,.1); }
+
+    .hatch-preview {
+      background: var(--surface2);
+      border-radius: 10px; padding: 12px 14px;
+      font-size: 13px; color: var(--muted);
+      display: none;
+    }
+    .hatch-preview.visible { display: block; }
+    .hatch-preview strong { color: var(--text); }
+
+    .photo-drop {
+      border: 2px dashed var(--surface2);
+      border-radius: 10px; padding: 20px;
+      text-align: center; cursor: pointer;
+      color: var(--muted); font-size: 13px;
+      position: relative; transition: border-color .15s;
+    }
+    .photo-drop:active { border-color: var(--accent); }
+    .photo-drop input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .photo-preview-img {
+      width: 100%; border-radius: 8px; margin-top: 10px;
+      max-height: 180px; object-fit: cover; display: none;
+    }
+
+    .coord-display {
+      background: var(--surface2); border-radius: 10px;
+      padding: 11px 14px; font-size: 13px; color: var(--muted);
+    }
+    .coord-display strong { color: var(--text); font-size: 14px; }
+    .coord-hint { font-size: 11px; margin-top: 3px; }
+
+    .btn-submit {
+      width: 100%; padding: 14px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 12px;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn-submit:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-submit:not(:disabled):active { opacity: .85; }
+
+    /* ── Share Card overlay ── */
+    #share-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.85);
+      align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    #share-overlay.visible { display: flex; }
+
+    .share-card {
+      background: #fff; color: #1e293b;
+      border-radius: 16px; padding: 24px;
+      width: 100%; max-width: 360px;
+      font-family: -apple-system, sans-serif;
+    }
+    .share-card-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+    }
+    .share-card-header .turtle-emoji { font-size: 32px; }
+    .share-card-header h2 { font-size: 18px; font-weight: 800; }
+    .share-card-header p { font-size: 12px; color: #64748b; }
+
+    .share-card-species-dot {
+      width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle;
+    }
+    .share-card-row { margin-bottom: 10px; }
+    .share-card-row .label { font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 2px; }
+    .share-card-row .value { font-size: 15px; font-weight: 600; }
+
+    .share-card-countdown {
+      background: #f0fdf4; border-radius: 12px;
+      padding: 16px; text-align: center; margin: 16px 0;
+    }
+    .share-card-countdown .big { font-size: 40px; font-weight: 900; color: #16a34a; line-height: 1; }
+    .share-card-countdown .small { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+    .share-card-photo { width: 100%; border-radius: 10px; margin-bottom: 16px; object-fit: cover; max-height: 160px; }
+    .share-card-footer { font-size: 11px; color: #94a3b8; text-align: center; }
+
+    .share-overlay-actions {
+      display: flex; gap: 10px; margin-top: 14px; width: 100%; max-width: 360px;
+    }
+    .share-overlay-actions button {
+      flex: 1; padding: 12px; border-radius: 10px; border: none;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    .btn-close-share { background: var(--surface2); color: var(--text); }
+    .btn-screenshot-hint { background: var(--accent); color: #fff; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: calc(var(--tab-h) + 16px); left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1e293b; color: var(--text);
+      padding: 10px 20px; border-radius: 20px;
+      font-size: 13px; font-weight: 600;
+      box-shadow: 0 4px 16px rgba(0,0,0,.4);
+      z-index: 900;
+      opacity: 0; transition: opacity .2s, transform .2s;
+      pointer-events: none; white-space: nowrap;
+    }
+    #toast.show {
+      opacity: 1; transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Loading overlay ── */
+    #loading {
+      position: fixed; inset: 0; z-index: 2000;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px;
+    }
+    #loading .spinner {
+      width: 40px; height: 40px; border: 3px solid var(--surface2);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    #loading p { font-size: 14px; color: var(--muted); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading.hidden { display: none; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span style="font-size:28px;line-height:1">🐢</span>
+    <div>
+      <h1>Turtle Nest Log</h1>
+      <div class="subtitle">Ormond by the Sea · Al Weeks → Verona</div>
+    </div>
+  </header>
+
+  <!-- MAP TAB -->
+  <div id="tab-map" class="tab-panel active">
+    <div id="map"></div>
+    <button class="map-fab" id="fab" title="Add nest">＋</button>
+    <div class="placing-hint" id="placing-hint">📍 Tap the map to place the nest manually</div>
+    <div class="placing-hint" id="gps-hint">📡 Getting your location…</div>
+  </div>
+
+  <!-- LIST TAB -->
+  <div id="tab-list" class="tab-panel">
+    <div class="list-header">
+      <h2>All Nests</h2>
+      <span class="nest-count" id="nest-count">0 nests</span>
+    </div>
+    <div class="species-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--loggerhead)"></div>Loggerhead</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--leatherback)"></div>Leatherback</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green-turtle)"></div>Green</div>
+    </div>
+    <div id="nest-list">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">🏖️</div>
+        <p>No nests logged yet.<br>Tap the map to add one!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD NEST TAB (form) -->
+  <div id="tab-add" class="tab-panel">
+    <div class="form-wrap">
+      <div class="form-title">Log New Nest</div>
+
+      <!-- Location -->
+      <div>
+        <label>Location</label>
+        <div class="coord-display" id="coord-display">
+          <strong id="coord-text">No location set</strong>
+          <div class="coord-hint">Tap ＋ on the map to pin your GPS location</div>
+        </div>
+      </div>
+
+      <!-- Nest number -->
+      <div>
+        <label for="nest-number">Nest Number</label>
+        <input type="text" id="nest-number" placeholder="e.g. OBS-2025-001" />
+      </div>
+
+      <!-- Species -->
+      <div>
+        <label>Species</label>
+        <div class="species-picker">
+          <button class="species-btn" data-species="loggerhead" onclick="selectSpecies('loggerhead',this)">🟠<br>Loggerhead</button>
+          <button class="species-btn" data-species="leatherback" onclick="selectSpecies('leatherback',this)">🔵<br>Leatherback</button>
+          <button class="species-btn" data-species="green" onclick="selectSpecies('green',this)">🟢<br>Green</button>
+        </div>
+      </div>
+
+      <!-- Date found -->
+      <div>
+        <label for="date-found">Date Found</label>
+        <input type="date" id="date-found" />
+      </div>
+
+      <!-- Hatch preview -->
+      <div class="hatch-preview" id="hatch-preview">
+        <strong>Estimated Hatch Window</strong><br>
+        <span id="hatch-range-text"></span>
+      </div>
+
+      <!-- Photo -->
+      <div>
+        <label>Photo (optional)</label>
+        <div class="photo-drop" id="photo-drop">
+          📷 Tap to add a photo
+          <input type="file" id="photo-input" accept="image/*" capture="environment" />
+        </div>
+        <img class="photo-preview-img" id="photo-preview" />
+      </div>
+
+      <!-- Notes -->
+      <div>
+        <label for="notes">Notes</label>
+        <textarea id="notes" placeholder="Crawl width, body pit details, GPS notes…"></textarea>
+      </div>
+
+      <button class="btn-submit" id="btn-submit" onclick="submitNest()">Save Nest</button>
+      <div style="height:8px"></div>
+    </div>
+  </div>
+
+  <!-- NAV TABS -->
+  <nav>
+    <button class="active" id="nav-map" onclick="switchTab('map')">
+      <span class="nav-icon">🗺️</span>Map
+    </button>
+    <button id="nav-list" onclick="switchTab('list')">
+      <span class="nav-icon">📋</span>Nests
+    </button>
+    <button id="nav-add" onclick="switchTab('add')">
+      <span class="nav-icon">➕</span>Add
+    </button>
+  </nav>
+</div>
+
+<!-- Share overlay -->
+<div id="share-overlay">
+  <div>
+    <div class="share-card" id="share-card"></div>
+    <div class="share-overlay-actions">
+      <button class="btn-close-share" onclick="closeShare()">Close</button>
+      <button class="btn-screenshot-hint" onclick="closeShare()">📸 Screenshot to share</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>Loading nests…</p>
+</div>
+
+<!-- Scripts -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+// ─────────────────────────────────────────────
+// CONFIG — paste your anon key below
+// ─────────────────────────────────────────────
+const SUPABASE_URL  = 'https://limdyowwnlleyyswwkeo.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_GMO9je7DtCsdQsivWcRklA_4Yzpz3ke';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ─────────────────────────────────────────────
+// Hatch windows per species (UF/IFAS)
+// ─────────────────────────────────────────────
+const HATCH = {
+  loggerhead:  { min: 55, max: 65, color: '#F97316', label: 'Loggerhead' },
+  leatherback: { min: 60, max: 70, color: '#3B82F6', label: 'Leatherback' },
+  green:       { min: 52, max: 56, color: '#22C55E', label: 'Green' },
+};
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+let nests = [];
+let pendingLatLng = null;
+let selectedSpecies = null;
+let pendingPhoto = null;
+let placingMode = false;
+let markers = {};   // id → leaflet marker
+
+// ─────────────────────────────────────────────
+// MAP
+// ─────────────────────────────────────────────
+const map = L.map('map', {
+  center: [29.375, -81.038],
+  zoom: 14,
+  zoomControl: false,
+});
+
+// ESRI satellite
+L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution: 'Tiles © Esri', maxZoom: 19 }
+).addTo(map);
+
+// zoom in top-right
+L.control.zoom({ position: 'topright' }).addTo(map);
+
+// Beach boundary box (Al Weeks → Verona) — fallback if GPS denied
+const BEACH_BOUNDS = L.latLngBounds(
+  [29.355, -81.045],
+  [29.393, -81.032]
+);
+
+// Center on user's GPS location on load; fall back to beach bounds
+function centerOnUser() {
+  if (!navigator.geolocation) {
+    map.fitBounds(BEACH_BOUNDS, { padding: [10, 10] });
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      map.setView(latlng, 18);
+    },
+    () => {
+      map.fitBounds(BEACH_BOUNDS, { padding: [10, 10] });
+    },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+  );
+}
+centerOnUser();
+
+// Tap-to-place (fallback when GPS denied)
+map.on('click', e => {
+  if (!placingMode) return;
+  pendingLatLng = e.latlng;
+  setPlacingMode(false);
+  updateCoordDisplay();
+  placePreviewPin(pendingLatLng);
+  switchTab('add');
+  showToast('📍 Location set — fill in the details');
+});
+
+// FAB — tap to drop pin at GPS location
+const fab = document.getElementById('fab');
+fab.addEventListener('click', () => {
+  if (placingMode) { setPlacingMode(false); return; }
+
+  if (!navigator.geolocation) {
+    showToast('⚠️ GPS not available — tap the map to place');
+    setPlacingMode(true);
+    return;
+  }
+
+  // Show GPS hint spinner
+  document.getElementById('gps-hint').classList.add('visible');
+  fab.textContent = '✕';
+  fab.classList.add('placing');
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      document.getElementById('gps-hint').classList.remove('visible');
+      fab.textContent = '＋';
+      fab.classList.remove('placing');
+
+      pendingLatLng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+      updateCoordDisplay();
+      placePreviewPin(pendingLatLng);
+      map.setView(pendingLatLng, 18);
+      switchTab('add');
+      showToast('📡 Location pinned — fill in the details');
+    },
+    err => {
+      document.getElementById('gps-hint').classList.remove('visible');
+      fab.textContent = '＋';
+      fab.classList.remove('placing');
+      showToast('📍 GPS unavailable — tap the map to place', 3500);
+      setPlacingMode(true);
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+});
+
+// Temporary preview pin while filling form
+let previewPin = null;
+function placePreviewPin(latlng) {
+  if (previewPin) { previewPin.remove(); previewPin = null; }
+  previewPin = L.circleMarker(latlng, {
+    radius: 10, color: '#0ea5e9', fillColor: '#0ea5e9',
+    fillOpacity: 0.5, weight: 2,
+  }).addTo(map);
+}
+
+function clearPreviewPin() {
+  if (previewPin) { previewPin.remove(); previewPin = null; }
+}
+
+function setPlacingMode(on) {
+  placingMode = on;
+  fab.textContent = on ? '✕' : '＋';
+  fab.classList.toggle('placing', on);
+  document.getElementById('placing-hint').classList.toggle('visible', on);
+  map.getContainer().style.cursor = on ? 'crosshair' : '';
+}
+
+function makeIcon(species) {
+  const color = HATCH[species]?.color || '#888';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+    <path d="M14 0C6.268 0 0 6.268 0 14c0 9.333 14 22 14 22S28 23.333 28 14C28 6.268 21.732 0 14 0z" fill="${color}"/>
+    <circle cx="14" cy="14" r="7" fill="white" opacity=".9"/>
+    <text x="14" y="18" text-anchor="middle" font-size="10" font-weight="bold" fill="${color}">🐢</text>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: '',
+    iconSize: [28, 36],
+    iconAnchor: [14, 36],
+    popupAnchor: [0, -36],
+  });
+}
+
+function addMarker(nest) {
+  const m = L.marker([nest.latitude, nest.longitude], { icon: makeIcon(nest.species) });
+  m.bindPopup(() => makePopupHTML(nest), { maxWidth: 240 });
+  m.addTo(map);
+  markers[nest.id] = m;
+}
+
+function makePopupHTML(nest) {
+  const h = HATCH[nest.species];
+  const daysMin = daysUntil(nest.hatch_date_min);
+  const daysMax = daysUntil(nest.hatch_date_max);
+  const countdown = daysMin <= 0 && daysMax <= 0
+    ? '🐣 Hatched!'
+    : daysMin <= 0
+      ? `<span style="color:${h.color}">${daysMax}d max</span>`
+      : `<span style="color:${h.color}">${daysMin}–${daysMax}d</span>`;
+
+  const photoHTML = nest.photo_url
+    ? `<img class="popup-photo" src="${nest.photo_url}" />`
+    : '';
+
+  return `<div>
+    <div class="popup-title">Nest ${escHtml(nest.nest_number)}</div>
+    <div class="popup-species" style="color:${h.color}">${h.label}</div>
+    <div class="popup-countdown">${countdown}</div>
+    <div class="popup-label">days to hatch window</div>
+    <div class="popup-dates">
+      Found: ${fmtDate(nest.date_found)}<br>
+      Hatch window: ${fmtDate(nest.hatch_date_min)} – ${fmtDate(nest.hatch_date_max)}
+    </div>
+    ${photoHTML}
+  </div>`;
+}
+
+// ─────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  document.getElementById(`nav-${name}`).classList.add('active');
+  if (name === 'map') map.invalidateSize();
+}
+
+// ─────────────────────────────────────────────
+// FORM
+// ─────────────────────────────────────────────
+function selectSpecies(sp, btn) {
+  selectedSpecies = sp;
+  document.querySelectorAll('.species-btn').forEach(b => {
+    b.className = 'species-btn';
+  });
+  btn.classList.add(`selected-${sp}`);
+  updateHatchPreview();
+}
+
+document.getElementById('date-found').addEventListener('change', updateHatchPreview);
+document.getElementById('date-found').value = todayStr();
+
+function updateHatchPreview() {
+  const dateVal = document.getElementById('date-found').value;
+  const preview = document.getElementById('hatch-preview');
+  const rangeEl = document.getElementById('hatch-range-text');
+  if (!selectedSpecies || !dateVal) { preview.classList.remove('visible'); return; }
+  const h = HATCH[selectedSpecies];
+  const d = new Date(dateVal + 'T12:00:00');
+  const minDate = addDays(d, h.min);
+  const maxDate = addDays(d, h.max);
+  rangeEl.textContent = `${fmtDate(minDate.toISOString().split('T')[0])} – ${fmtDate(maxDate.toISOString().split('T')[0])}  (${h.min}–${h.max} days)`;
+  preview.classList.add('visible');
+}
+
+document.getElementById('photo-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  pendingPhoto = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById('photo-preview');
+    img.src = ev.target.result;
+    img.style.display = 'block';
+    document.getElementById('photo-drop').querySelector('input').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+});
+
+function updateCoordDisplay() {
+  const el = document.getElementById('coord-text');
+  if (pendingLatLng) {
+    el.textContent = `${pendingLatLng.lat.toFixed(5)}°N, ${pendingLatLng.lng.toFixed(5)}°W`;
+    document.querySelector('.coord-hint').textContent = 'Tap map ＋ button to reposition';
+  }
+}
+
+async function submitNest() {
+  const nestNumber = document.getElementById('nest-number').value.trim();
+  const dateFound  = document.getElementById('date-found').value;
+  const notes      = document.getElementById('notes').value.trim();
+
+  if (!nestNumber)      { showToast('⚠️ Enter a nest number'); return; }
+  if (!selectedSpecies) { showToast('⚠️ Select a species'); return; }
+  if (!dateFound)       { showToast('⚠️ Enter the date found'); return; }
+  if (!pendingLatLng)   { showToast('⚠️ Set location on the map first'); return; }
+
+  const h = HATCH[selectedSpecies];
+  const d = new Date(dateFound + 'T12:00:00');
+  const hatch_date_min = addDays(d, h.min).toISOString().split('T')[0];
+  const hatch_date_max = addDays(d, h.max).toISOString().split('T')[0];
+
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    let photo_url = null;
+
+    // Upload photo
+    if (pendingPhoto) {
+      const ext = pendingPhoto.name.split('.').pop();
+      const path = `${Date.now()}.${ext}`;
+      const { data: upData, error: upErr } = await db.storage
+        .from('nest-photos')
+        .upload(path, pendingPhoto, { contentType: pendingPhoto.type });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = db.storage.from('nest-photos').getPublicUrl(path);
+      photo_url = publicUrl;
+    }
+
+    // Insert record
+    const { data, error } = await db.from('turtle_nests').insert([{
+      nest_number: nestNumber,
+      species: selectedSpecies,
+      date_found: dateFound,
+      latitude: pendingLatLng.lat,
+      longitude: pendingLatLng.lng,
+      photo_url,
+      notes,
+      hatch_date_min,
+      hatch_date_max,
+    }]).select().single();
+
+    if (error) throw error;
+
+    nests.unshift(data);
+    addMarker(data);
+    renderList();
+    clearPreviewPin();
+    resetForm();
+    switchTab('map');
+    map.setView([data.latitude, data.longitude], 16);
+    markers[data.id].openPopup();
+    showToast('🐢 Nest saved!');
+  } catch (err) {
+    console.error(err);
+    showToast('❌ Error saving: ' + (err.message || 'unknown'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Nest';
+  }
+}
+
+function resetForm() {
+  document.getElementById('nest-number').value = '';
+  document.getElementById('notes').value = '';
+  document.getElementById('date-found').value = todayStr();
+  document.getElementById('photo-preview').style.display = 'none';
+  document.getElementById('photo-drop').querySelector('input').style.display = '';
+  document.getElementById('hatch-preview').classList.remove('visible');
+  document.querySelectorAll('.species-btn').forEach(b => b.className = 'species-btn');
+  selectedSpecies = null;
+  pendingLatLng = null;
+  pendingPhoto = null;
+  clearPreviewPin();
+  document.getElementById('coord-text').textContent = 'No location set';
+  document.querySelector('.coord-hint').textContent = 'Tap ＋ on the map to pin your GPS location';
+}
+
+// ─────────────────────────────────────────────
+// LIST
+// ─────────────────────────────────────────────
+function renderList() {
+  const list = document.getElementById('nest-list');
+  const empty = document.getElementById('empty-state');
+  document.getElementById('nest-count').textContent = `${nests.length} nest${nests.length !== 1 ? 's' : ''}`;
+
+  if (nests.length === 0) {
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Remove old cards (keep empty state)
+  list.querySelectorAll('.nest-card').forEach(el => el.remove());
+
+  nests.forEach(nest => {
+    const h = HATCH[nest.species];
+    const dMin = daysUntil(nest.hatch_date_min);
+    const dMax = daysUntil(nest.hatch_date_max);
+
+    let badgeNum, badgeLabel, badgeClass = '';
+    if (dMax <= 0) {
+      badgeNum = '🐣'; badgeLabel = 'Hatched'; badgeClass = 'hatched';
+    } else if (dMin <= 0) {
+      badgeNum = dMax; badgeLabel = 'days max'; badgeClass = 'soon';
+    } else {
+      badgeNum = dMin; badgeLabel = 'days min';
+      if (dMin <= 7) badgeClass = 'soon';
+    }
+
+    const thumbHTML = nest.photo_url
+      ? `<img class="nest-card-thumb" src="${nest.photo_url}" />`
+      : `<div class="nest-card-thumb">🥚</div>`;
+
+    const card = document.createElement('div');
+    card.className = `nest-card ${nest.species}`;
+    card.innerHTML = `
+      ${thumbHTML}
+      <div class="nest-card-body">
+        <div class="nest-card-title">Nest ${escHtml(nest.nest_number)}</div>
+        <div class="nest-card-sub" style="color:${h.color}">${h.label}</div>
+        <div class="nest-card-dates">
+          Found: ${fmtDate(nest.date_found)}<br>
+          Hatch: ${fmtDate(nest.hatch_date_min)} – ${fmtDate(nest.hatch_date_max)}
+        </div>
+        <div class="nest-card-actions">
+          <button class="btn-share" onclick="openShare('${nest.id}')">📤 Share Card</button>
+          <button class="btn-delete" onclick="deleteNest('${nest.id}')">Delete</button>
+        </div>
+      </div>
+      <div class="days-badge ${badgeClass}">
+        <div class="days-num">${badgeNum}</div>
+        <div class="days-label">${badgeLabel}</div>
+      </div>
+    `;
+
+    // tap card → fly to marker
+    card.addEventListener('click', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      switchTab('map');
+      if (markers[nest.id]) {
+        map.setView([nest.latitude, nest.longitude], 16);
+        setTimeout(() => markers[nest.id].openPopup(), 300);
+      }
+    });
+
+    list.appendChild(card);
+  });
+}
+
+// ─────────────────────────────────────────────
+// SHARE CARD
+// ─────────────────────────────────────────────
+function openShare(id) {
+  const nest = nests.find(n => n.id === id);
+  if (!nest) return;
+  const h = HATCH[nest.species];
+  const dMin = daysUntil(nest.hatch_date_min);
+  const dMax = daysUntil(nest.hatch_date_max);
+
+  let countdownHTML;
+  if (dMax <= 0) {
+    countdownHTML = `<div class="big">🐣</div><div class="small">This nest has hatched!</div>`;
+  } else if (dMin <= 0) {
+    countdownHTML = `<div class="big" style="color:${h.color}">${dMax}</div><div class="small">days remaining (max)</div>`;
+  } else {
+    countdownHTML = `<div class="big" style="color:${h.color}">${dMin}–${dMax}</div><div class="small">days until hatching window</div>`;
+  }
+
+  const photoHTML = nest.photo_url
+    ? `<img class="share-card-photo" src="${nest.photo_url}" />`
+    : '';
+
+  document.getElementById('share-card').innerHTML = `
+    <div class="share-card-header">
+      <div class="turtle-emoji">🐢</div>
+      <div>
+        <h2>Sea Turtle Nest</h2>
+        <p>Ormond by the Sea, FL</p>
+      </div>
+    </div>
+    ${photoHTML}
+    <div class="share-card-row">
+      <div class="label">Nest</div>
+      <div class="value">${escHtml(nest.nest_number)}</div>
+    </div>
+    <div class="share-card-row">
+      <div class="label">Species</div>
+      <div class="value">
+        <span class="share-card-species-dot" style="background:${h.color}"></span>${h.label}
+      </div>
+    </div>
+    <div class="share-card-row">
+      <div class="label">Found</div>
+      <div class="value">${fmtDate(nest.date_found)}</div>
+    </div>
+    <div class="share-card-countdown">${countdownHTML}</div>
+    <div class="share-card-footer">
+      Hatch window: ${fmtDate(nest.hatch_date_min)} – ${fmtDate(nest.hatch_date_max)}<br>
+      Tracked by Ormond by the Sea Turtle Watchers 🏖️
+    </div>
+  `;
+
+  document.getElementById('share-overlay').classList.add('visible');
+}
+
+function closeShare() {
+  document.getElementById('share-overlay').classList.remove('visible');
+}
+
+// ─────────────────────────────────────────────
+// DELETE
+// ─────────────────────────────────────────────
+async function deleteNest(id) {
+  if (!confirm('Delete this nest record?')) return;
+  const { error } = await db.from('turtle_nests').delete().eq('id', id);
+  if (error) { showToast('❌ ' + error.message); return; }
+  nests = nests.filter(n => n.id !== id);
+  if (markers[id]) { markers[id].remove(); delete markers[id]; }
+  renderList();
+  showToast('Nest deleted');
+}
+
+// ─────────────────────────────────────────────
+// LOAD
+// ─────────────────────────────────────────────
+async function loadNests() {
+  const { data, error } = await db
+    .from('turtle_nests')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  document.getElementById('loading').classList.add('hidden');
+
+  if (error) {
+    console.error(error);
+    showToast('⚠️ Could not load nests — check your Supabase config');
+    return;
+  }
+
+  nests = data || [];
+  nests.forEach(addMarker);
+  renderList();
+}
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+function daysUntil(dateStr) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(dateStr + 'T00:00:00');
+  return Math.ceil((target - today) / 86400000);
+}
+
+function addDays(date, days) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function fmtDate(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function escHtml(str) {
+  return String(str).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+let toastTimer;
+function showToast(msg, duration = 2800) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+loadNests();
+</script>
+</body>
+</html>
