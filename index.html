@@ -444,10 +444,10 @@
 
       <!-- Photo -->
       <div>
-        <label>Photo (optional)</label>
+        <label>Photo <span style="color:var(--accent);font-size:11px;font-weight:600;">— auto-fills GPS &amp; date</span></label>
         <div class="photo-drop" id="photo-drop">
-          📷 Tap to add a photo
-          <input type="file" id="photo-input" accept="image/*" capture="environment" />
+          📷 Tap to pick a nest photo
+          <input type="file" id="photo-input" accept="image/*,image/heic,image/heif" />
         </div>
         <img class="photo-preview-img" id="photo-preview" />
       </div>
@@ -500,6 +500,7 @@
 <!-- Scripts -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
 <script>
 // ─────────────────────────────────────────────
 // CONFIG — paste your anon key below
@@ -734,10 +735,12 @@ function updateHatchPreview() {
   preview.classList.add('visible');
 }
 
-document.getElementById('photo-input').addEventListener('change', e => {
+document.getElementById('photo-input').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
   pendingPhoto = file;
+
+  // Show preview
   const reader = new FileReader();
   reader.onload = ev => {
     const img = document.getElementById('photo-preview');
@@ -746,6 +749,40 @@ document.getElementById('photo-input').addEventListener('change', e => {
     document.getElementById('photo-drop').querySelector('input').style.display = 'none';
   };
   reader.readAsDataURL(file);
+
+  // Extract EXIF — GPS + date
+  try {
+    const exif = await exifr.parse(file, { gps: true, tiff: true, ifd0: true, exif: true });
+    if (!exif) return;
+
+    let filled = [];
+
+    // GPS coords
+    if (exif.latitude != null && exif.longitude != null) {
+      pendingLatLng = L.latLng(exif.latitude, exif.longitude);
+      updateCoordDisplay();
+      placePreviewPin(pendingLatLng);
+      filled.push('📍 GPS');
+    }
+
+    // Date taken
+    const dateSrc = exif.DateTimeOriginal || exif.CreateDate || exif.DateTime;
+    if (dateSrc) {
+      const d = dateSrc instanceof Date ? dateSrc : new Date(dateSrc);
+      if (!isNaN(d)) {
+        const yyyy = d.getFullYear();
+        const mm   = String(d.getMonth() + 1).padStart(2, '0');
+        const dd   = String(d.getDate()).padStart(2, '0');
+        document.getElementById('date-found').value = `${yyyy}-${mm}-${dd}`;
+        updateHatchPreview();
+        filled.push('📅 Date');
+      }
+    }
+
+    if (filled.length) showToast(`✅ Auto-filled from photo: ${filled.join(', ')}`);
+  } catch (err) {
+    console.warn('EXIF read failed:', err);
+  }
 });
 
 function updateCoordDisplay() {
