@@ -198,6 +198,7 @@
     }
     .btn-share { background: var(--surface2); color: var(--text); }
     .btn-delete { background: transparent; color: var(--danger); }
+    .btn-edit   { background: transparent; color: var(--accent); }
 
     .empty-state {
       flex: 1; display: flex; flex-direction: column;
@@ -330,6 +331,35 @@
     }
     .btn-close-share { background: var(--surface2); color: var(--text); }
     .btn-screenshot-hint { background: var(--accent); color: #fff; }
+
+    /* ── Edit modal ── */
+    #edit-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.75);
+      align-items: flex-end; justify-content: center;
+    }
+    #edit-overlay.visible { display: flex; }
+    #edit-sheet {
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      padding: 20px 20px 36px;
+      width: 100%; max-width: 480px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    #edit-sheet h3 { font-size: 17px; font-weight: 700; margin-bottom: 2px; }
+    .edit-row { display: flex; flex-direction: column; gap: 5px; }
+    .btn-edit-save {
+      width: 100%; padding: 14px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 12px;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+    }
+    .btn-edit-cancel {
+      width: 100%; padding: 12px;
+      background: transparent; color: var(--muted);
+      border: none; font-size: 14px; cursor: pointer;
+    }
 
     /* ── Toast ── */
     #toast {
@@ -488,6 +518,27 @@
       <button class="btn-close-share" onclick="closeShare()">Close</button>
       <button class="btn-screenshot-hint" onclick="closeShare()">📸 Screenshot to share</button>
     </div>
+  </div>
+</div>
+
+<!-- Edit overlay -->
+<div id="edit-overlay">
+  <div id="edit-sheet">
+    <h3>Edit Nest</h3>
+    <div class="edit-row">
+      <label for="edit-nest-number">Nest Number</label>
+      <input type="text" id="edit-nest-number" />
+    </div>
+    <div class="edit-row">
+      <label for="edit-date-found">Date Found</label>
+      <input type="date" id="edit-date-found" />
+    </div>
+    <div class="edit-row">
+      <label for="edit-notes">Notes</label>
+      <textarea id="edit-notes" style="min-height:60px"></textarea>
+    </div>
+    <button class="btn-edit-save" id="btn-edit-save" onclick="saveEdit()">Save Changes</button>
+    <button class="btn-edit-cancel" onclick="closeEdit()">Cancel</button>
   </div>
 </div>
 
@@ -896,6 +947,75 @@ function resetForm() {
 }
 
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// EDIT
+// ─────────────────────────────────────────────
+let editingId = null;
+
+function openEdit(id) {
+  const nest = nests.find(n => n.id === id);
+  if (!nest) return;
+  editingId = id;
+  document.getElementById('edit-nest-number').value = nest.nest_number;
+  document.getElementById('edit-date-found').value  = nest.date_found;
+  document.getElementById('edit-notes').value       = nest.notes || '';
+  document.getElementById('edit-overlay').classList.add('visible');
+}
+
+function closeEdit() {
+  editingId = null;
+  document.getElementById('edit-overlay').classList.remove('visible');
+}
+
+async function saveEdit() {
+  const nestNumber = document.getElementById('edit-nest-number').value.trim();
+  const dateFound  = document.getElementById('edit-date-found').value;
+  const notes      = document.getElementById('edit-notes').value.trim();
+  if (!nestNumber) { showToast('⚠️ Enter a nest number'); return; }
+  if (!dateFound)  { showToast('⚠️ Enter a date');        return; }
+
+  const nest = nests.find(n => n.id === editingId);
+  if (!nest) return;
+
+  const btn = document.getElementById('btn-edit-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  // Recalculate hatch dates if it's a real nest
+  let hatch_date_min = nest.hatch_date_min;
+  let hatch_date_max = nest.hatch_date_max;
+  if (nest.species !== 'false_crawl') {
+    const h = HATCH[nest.species];
+    const d = new Date(dateFound + 'T12:00:00');
+    hatch_date_min = addDays(d, h.min).toISOString().split('T')[0];
+    hatch_date_max = addDays(d, h.max).toISOString().split('T')[0];
+  }
+
+  try {
+    const { error } = await db.from('turtle_nests')
+      .update({ nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max })
+      .eq('id', editingId);
+    if (error) throw error;
+
+    // Update local state
+    Object.assign(nest, { nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max });
+    renderList();
+    if (markers[editingId]) {
+      markers[editingId].setPopupContent(makePopupHTML(nest));
+    }
+    closeEdit();
+    showToast('✅ Nest updated!');
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Update failed'));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save Changes';
+  }
+}
+
+// close edit if user taps backdrop
+document.getElementById('edit-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('edit-overlay')) closeEdit();
+});
+
 // LIST
 // ─────────────────────────────────────────────
 function renderList() {
@@ -959,7 +1079,8 @@ function renderList() {
         <div class="nest-card-sub" style="color:${h.color}">${h.label}</div>
         <div class="nest-card-dates">${datesHTML}</div>
         <div class="nest-card-actions">
-          <button class="btn-share" onclick="openShare('${nest.id}')">📤 Share Card</button>
+          <button class="btn-share" onclick="openShare('${nest.id}')">📤 Share</button>
+          <button class="btn-edit" onclick="openEdit('${nest.id}')">✏️ Edit</button>
           <button class="btn-delete" onclick="deleteNest('${nest.id}')">Delete</button>
         </div>
       </div>
