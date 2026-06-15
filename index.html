@@ -393,6 +393,16 @@
     #loading p { font-size: 14px; color: var(--muted); }
     @keyframes spin { to { transform: rotate(360deg); } }
     #loading.hidden { display: none; }
+    .street-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 0 3px #000, 0 0 3px #000, 0 0 2px #000;
+      white-space: nowrap;
+      pointer-events: none;
+      line-height: 1;
+      padding-left: 2px;
+    }
   </style>
 </head>
 <body>
@@ -1244,9 +1254,64 @@ function showToast(msg, duration = 2800) {
 }
 
 // ─────────────────────────────────────────────
+// STREET LABELS (east end of E-W streets)
+// ─────────────────────────────────────────────
+async function loadStreetLabels() {
+  const CACHE_KEY = 'street_labels_v2';
+  const CACHE_TTL = 48 * 60 * 60 * 1000;
+  let ways;
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { ts, data } = JSON.parse(cached);
+      if (Date.now() - ts < CACHE_TTL) ways = data;
+    }
+  } catch(e) {}
+
+  if (!ways) {
+    try {
+      const query = `[out:json][timeout:15];
+way["name"]["highway"~"residential|tertiary|secondary|primary|unclassified|living_street|road"](29.35,-81.055,29.40,-81.025);
+out geom;`;
+      const res = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST', body: 'data=' + encodeURIComponent(query)
+      });
+      const json = await res.json();
+      ways = json.elements || [];
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: ways }));
+    } catch(e) { return; }
+  }
+
+  const seen = new Set();
+  for (const way of ways) {
+    if (!way.geometry?.length || !way.tags?.name) continue;
+    const lats = way.geometry.map(p => p.lat);
+    const lngs = way.geometry.map(p => p.lon);
+    const latSpan = Math.max(...lats) - Math.min(...lats);
+    const lngSpan = Math.max(...lngs) - Math.min(...lngs);
+    // skip N-S streets (taller than wide)
+    if (lngSpan < latSpan * 1.2) continue;
+    // find easternmost point
+    let east = way.geometry[0];
+    for (const pt of way.geometry) if (pt.lon > east.lon) east = pt;
+    // dedup: same name + same lat row
+    const key = way.tags.name + '|' + east.lat.toFixed(4);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const icon = L.divIcon({
+      className: '',
+      html: `<div class="street-label">${way.tags.name}</div>`,
+      iconAnchor: [0, 8],
+    });
+    L.marker([east.lat, east.lon], { icon, interactive: false }).addTo(map);
+  }
+}
+
+// ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
 loadNests();
+loadStreetLabels();
 </script>
 </body>
 </html>
