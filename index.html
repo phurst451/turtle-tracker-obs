@@ -372,9 +372,17 @@
       z-index: 900;
       opacity: 0; transition: opacity .2s, transform .2s;
       pointer-events: none; white-space: nowrap;
+      display: flex; align-items: center; gap: 10px;
     }
     #toast.show {
       opacity: 1; transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+    #toast-undo {
+      background: var(--accent); color: #000;
+      border: none; border-radius: 10px;
+      padding: 3px 10px; font-size: 12px; font-weight: 700;
+      cursor: pointer; flex-shrink: 0;
     }
 
     /* ── Loading overlay ── */
@@ -553,7 +561,7 @@
 </div>
 
 <!-- Toast -->
-<div id="toast"></div>
+<div id="toast"><span id="toast-msg"></span><button id="toast-undo" style="display:none"></button></div>
 
 <!-- Loading -->
 <div id="loading">
@@ -731,13 +739,26 @@ function makeIcon(species) {
 function addMarker(nest) {
   const m = L.marker([nest.latitude, nest.longitude], { icon: makeIcon(nest.species), draggable: true });
   m.bindPopup(() => makePopupHTML(nest), { maxWidth: 240 });
+  let preDragLatLng = null;
+  m.on('dragstart', () => { preDragLatLng = m.getLatLng(); });
   m.on('dragend', async () => {
     const { lat, lng } = m.getLatLng();
+    const origLat = nest.latitude, origLng = nest.longitude;
     const { error } = await db.from('turtle_nests').update({ latitude: lat, longitude: lng }).eq('id', nest.id);
-    if (error) { showToast('❌ Move failed: ' + error.message); m.setLatLng([nest.latitude, nest.longitude]); return; }
+    if (error) { showToast('❌ Move failed: ' + error.message); m.setLatLng([origLat, origLng]); return; }
     nest.latitude = lat;
     nest.longitude = lng;
-    showToast('📍 Location updated');
+    showToast('📍 Location updated', 5000, {
+      label: 'Undo',
+      fn: async () => {
+        const { error: e2 } = await db.from('turtle_nests').update({ latitude: origLat, longitude: origLng }).eq('id', nest.id);
+        if (e2) { showToast('❌ Restore failed: ' + e2.message); return; }
+        m.setLatLng([origLat, origLng]);
+        nest.latitude = origLat;
+        nest.longitude = origLng;
+        showToast('↩️ Location restored');
+      }
+    });
   });
   m.addTo(map);
   markers[nest.id] = m;
@@ -1245,9 +1266,19 @@ function escHtml(str) {
 }
 
 let toastTimer;
-function showToast(msg, duration = 2800) {
+function showToast(msg, duration = 2800, action = null) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
+  const msgEl = document.getElementById('toast-msg');
+  const undoBtn = document.getElementById('toast-undo');
+  msgEl.textContent = msg;
+  if (action) {
+    undoBtn.textContent = action.label;
+    undoBtn.style.display = '';
+    undoBtn.onclick = () => { el.classList.remove('show'); action.fn(); };
+  } else {
+    undoBtn.style.display = 'none';
+    undoBtn.onclick = null;
+  }
   el.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), duration);
