@@ -569,7 +569,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Hatch windows per species (UF/IFAS)
 // ─────────────────────────────────────────────
 const HATCH = {
-  loggerhead:  { min: 55, max: 65, color: '#F97316', label: 'Loggerhead' },
+  loggerhead:  { min: 45, max: 60, color: '#F97316', label: 'Loggerhead' },
   leatherback: { min: 60, max: 70, color: '#3B82F6', label: 'Leatherback' },
   green:       { min: 52, max: 56, color: '#22C55E', label: 'Green' },
   false_crawl: { min: null, max: null, color: '#94a3b8', label: 'False Crawl' },
@@ -719,8 +719,16 @@ function makeIcon(species) {
 }
 
 function addMarker(nest) {
-  const m = L.marker([nest.latitude, nest.longitude], { icon: makeIcon(nest.species) });
+  const m = L.marker([nest.latitude, nest.longitude], { icon: makeIcon(nest.species), draggable: true });
   m.bindPopup(() => makePopupHTML(nest), { maxWidth: 240 });
+  m.on('dragend', async () => {
+    const { lat, lng } = m.getLatLng();
+    const { error } = await db.from('turtle_nests').update({ latitude: lat, longitude: lng }).eq('id', nest.id);
+    if (error) { showToast('❌ Move failed: ' + error.message); m.setLatLng([nest.latitude, nest.longitude]); return; }
+    nest.latitude = lat;
+    nest.longitude = lng;
+    showToast('📍 Location updated');
+  });
   m.addTo(map);
   markers[nest.id] = m;
 }
