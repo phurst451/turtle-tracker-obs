@@ -644,8 +644,6 @@ function centerOnUser() {
     { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
   );
 }
-centerOnUser();
-
 // Tap-to-place (fallback when GPS denied)
 map.on('click', e => {
   if (!placingMode) return;
