@@ -514,6 +514,16 @@
     </div>
   </div>
 
+  <!-- Report Tab -->
+  <div id="tab-report" class="tab-panel" style="overflow-y:auto;padding:20px 16px;gap:16px;">
+    <h2 style="margin:0 0 4px;font-size:18px;font-weight:700;">Nest Report</h2>
+    <p id="report-summary" style="margin:0 0 16px;color:var(--muted);font-size:13px;"></p>
+    <button class="btn-submit" onclick="downloadReport()" id="btn-dl-report">
+      ⬇️ Download Excel Spreadsheet
+    </button>
+    <div id="report-nest-list" style="margin-top:20px;display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+
   <!-- NAV TABS -->
   <nav>
     <button class="active" id="nav-map" onclick="switchTab('map')">
@@ -524,6 +534,9 @@
     </button>
     <button id="nav-add" onclick="switchTab('add')">
       <span class="nav-icon">➕</span>Add
+    </button>
+    <button id="nav-report" onclick="switchTab('report')">
+      <span class="nav-icon">📊</span>Report
     </button>
   </nav>
 </div>
@@ -573,6 +586,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script>
 // ─────────────────────────────────────────────
 // CONFIG — paste your anon key below
@@ -808,6 +822,79 @@ function switchTab(name) {
   document.getElementById(`tab-${name}`).classList.add('active');
   document.getElementById(`nav-${name}`).classList.add('active');
   if (name === 'map') map.invalidateSize();
+  if (name === 'report') renderReportTab();
+}
+
+function renderReportTab() {
+  const total = allNests.length;
+  const fc = allNests.filter(n => n.species === 'false_crawl').length;
+  document.getElementById('report-summary').textContent =
+    `${total} total · ${total - fc} nests · ${fc} false crawl${fc !== 1 ? 's' : ''}`;
+
+  const list = document.getElementById('report-nest-list');
+  list.innerHTML = '';
+  const sorted = [...allNests].sort((a, b) => a.date_found.localeCompare(b.date_found));
+  for (const n of sorted) {
+    const h = HATCH[n.species] || HATCH.loggerhead;
+    const street = closestStreetName(n.latitude, n.longitude);
+    const isFc = n.species === 'false_crawl';
+    const hatchTxt = isFc ? 'False Crawl' : `${fmtDate(n.hatch_date_min)} – ${fmtDate(n.hatch_date_max)}`;
+    const row = document.createElement('div');
+    row.style.cssText = 'background:var(--surface);border-radius:10px;padding:10px 12px;font-size:12px;border-left:3px solid ' + h.color;
+    row.innerHTML = `<div style="font-weight:700;font-size:13px;color:var(--text)">${escHtml(n.nest_number)}</div>
+      <div style="color:var(--muted);margin-top:2px">${street} · Found ${fmtDate(n.date_found)}</div>
+      <div style="color:${h.color};margin-top:2px">${hatchTxt}</div>`;
+    list.appendChild(row);
+  }
+}
+
+function closestStreetName(lat, lng) {
+  let best = '', bestD = Infinity;
+  for (const [slat, slng, name] of STREET_LABELS) {
+    const d = Math.sqrt(((lat - slat) * 111) ** 2 + ((lng - slng) * 99) ** 2);
+    if (d < bestD) { bestD = d; best = name; }
+  }
+  return best;
+}
+
+function fmtDate(s) {
+  if (!s) return '';
+  const [y, m, d] = s.split('-');
+  const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  try { return `${mon[+m-1]} ${+d}, ${y}`; } catch { return s; }
+}
+
+function downloadReport() {
+  const btn = document.getElementById('btn-dl-report');
+  btn.textContent = '⏳ Building…';
+  btn.disabled = true;
+  try {
+    const rows = [['Nest #','Species','Date Found','Hatch Min','Hatch Max','Nearest Street','Notes','Photo URL']];
+    const sorted = [...allNests].sort((a, b) => a.date_found.localeCompare(b.date_found));
+    for (const n of sorted) {
+      rows.push([
+        n.nest_number,
+        HATCH[n.species]?.label || n.species,
+        n.date_found,
+        n.species === 'false_crawl' ? '' : n.hatch_date_min,
+        n.species === 'false_crawl' ? '' : n.hatch_date_max,
+        closestStreetName(n.latitude, n.longitude),
+        n.notes || '',
+        n.photo_url || '',
+      ]);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    // Column widths
+    ws['!cols'] = [14,14,13,13,13,22,20,40].map(w => ({ wch: w }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Nest Log');
+    XLSX.writeFile(wb, `Turtle_Nest_Log_${new Date().toISOString().slice(0,10)}.xlsx`);
+  } catch(e) {
+    showToast('❌ Export failed: ' + e.message);
+  } finally {
+    btn.textContent = '⬇️ Download Excel Spreadsheet';
+    btn.disabled = false;
+  }
 }
 
 // ─────────────────────────────────────────────
