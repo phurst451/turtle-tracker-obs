@@ -826,14 +826,14 @@ function switchTab(name) {
 }
 
 function renderReportTab() {
-  const total = allNests.length;
-  const fc = allNests.filter(n => n.species === 'false_crawl').length;
+  const total = nests.length;
+  const fc = nests.filter(n => n.species === 'false_crawl').length;
   document.getElementById('report-summary').textContent =
     `${total} total · ${total - fc} nests · ${fc} false crawl${fc !== 1 ? 's' : ''}`;
 
   const list = document.getElementById('report-nest-list');
   list.innerHTML = '';
-  const sorted = [...allNests].sort((a, b) => a.date_found.localeCompare(b.date_found));
+  const sorted = [...nests].sort((a, b) => a.date_found.localeCompare(b.date_found));
   for (const n of sorted) {
     const h = HATCH[n.species] || HATCH.loggerhead;
     const street = closestStreetName(n.latitude, n.longitude);
@@ -870,7 +870,7 @@ function downloadReport() {
   btn.disabled = true;
   try {
     const rows = [['Nest #','Species','Date Found','Hatch Min','Hatch Max','Nearest Street','Notes','Photo URL']];
-    const sorted = [...allNests].sort((a, b) => a.date_found.localeCompare(b.date_found));
+    const sorted = [...nests].sort((a, b) => a.date_found.localeCompare(b.date_found));
     for (const n of sorted) {
       rows.push([
         n.nest_number,
