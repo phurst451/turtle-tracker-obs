@@ -619,6 +619,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 <script>
 // ─────────────────────────────────────────────
 // CONFIG — paste your anon key below
@@ -1114,37 +1115,21 @@ function showPhotoPreview(file) {
   reader.readAsDataURL(file);
 }
 
-async function toJpegBlob(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext('2d').drawImage(img, 0, 0);
-      URL.revokeObjectURL(url);
-      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('canvas toBlob failed')), 'image/jpeg', 0.92);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
-    img.src = url;
-  });
-}
-
 async function handlePhotoFile(file) {
   if (!file) return;
   showPhotoPreview(file);
 
-  // Transcode HEIC/non-JPEG → JPEG so browsers can display thumbnails
-  const needsTranscode = file.type === 'image/heic' || file.type === 'image/heif' ||
-                         !file.type.startsWith('image/jpeg') && !file.type.startsWith('image/png') &&
-                         !file.type.startsWith('image/webp');
-  if (needsTranscode) {
+  // Transcode HEIC/HEIF → JPEG (browsers can't display HEIC natively)
+  const isHeic = file.type === 'image/heic' || file.type === 'image/heif' ||
+                 /\.heic$/i.test(file.name) || /\.heif$/i.test(file.name);
+  if (isHeic && typeof heic2any !== 'undefined') {
     try {
-      const blob = await toJpegBlob(file);
-      pendingPhoto = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+      const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+      const jpegBlob = Array.isArray(blob) ? blob[0] : blob;
+      pendingPhoto = new File([jpegBlob], file.name.replace(/\.[^.]+$/i, '.jpg'), { type: 'image/jpeg' });
+      showPhotoPreview(pendingPhoto); // update preview with decoded JPEG
     } catch (e) {
-      console.warn('Transcode failed, uploading original:', e);
+      console.warn('HEIC transcode failed:', e);
       pendingPhoto = file;
     }
   } else {
