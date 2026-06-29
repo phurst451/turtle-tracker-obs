@@ -1616,6 +1616,12 @@ async function loadNests() {
   nests = data || [];
   nests.forEach(addMarker);
   renderList();
+
+  // Fit map to show all nests with a little padding
+  if (nests.length > 0) {
+    const bounds = L.latLngBounds(nests.map(n => [n.latitude, n.longitude]));
+    map.fitBounds(bounds, { padding: [40, 60] });
+  }
 }
 
 // ─────────────────────────────────────────────
