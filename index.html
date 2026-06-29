@@ -49,6 +49,13 @@
     header img { width: 28px; height: 28px; }
     header h1 { font-size: 17px; font-weight: 700; flex: 1; }
     header .subtitle { font-size: 11px; color: var(--muted); }
+    .view-badge { font-size: 10px; font-weight: 700; background: var(--accent); color: #fff; padding: 2px 7px; border-radius: 99px; letter-spacing: .04em; }
+
+    /* ── View-only mode ── */
+    body.view-only #nav-add,
+    body.view-only #nav-report,
+    body.view-only .btn-edit,
+    body.view-only #fab { display: none !important; }
 
     nav {
       display: flex;
@@ -632,6 +639,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+const VIEW_ONLY = new URLSearchParams(location.search).has('view');
+if (VIEW_ONLY) {
+  document.body.classList.add('view-only');
+  document.querySelector('header h1').insertAdjacentHTML('afterend', '<span class="view-badge">Live Map</span>');
+}
+
 // ─────────────────────────────────────────────
 // Hatch windows per species (UF/IFAS)
 // ─────────────────────────────────────────────
@@ -875,6 +888,7 @@ function makePopupHTML(nest) {
 // TABS
 // ─────────────────────────────────────────────
 function switchTab(name) {
+  if (VIEW_ONLY && (name === 'add' || name === 'report')) return;
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById(`tab-${name}`).classList.add('active');
