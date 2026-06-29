@@ -380,6 +380,12 @@
       background: transparent; color: var(--muted);
       border: none; font-size: 14px; cursor: pointer;
     }
+    .btn-edit-delete {
+      width: 100%; padding: 11px;
+      background: transparent; color: var(--danger);
+      border: 1px solid var(--danger); border-radius: 10px;
+      font-size: 14px; cursor: pointer; margin-top: 4px;
+    }
 
     /* ── Toast ── */
     #toast {
@@ -595,6 +601,7 @@
     </div>
     <button class="btn-edit-save" id="btn-edit-save" onclick="saveEdit()">Save Changes</button>
     <button class="btn-edit-cancel" onclick="closeEdit()">Cancel</button>
+    <button class="btn-edit-delete" id="btn-edit-delete" onclick="deleteNest()">🗑 Delete Nest</button>
   </div>
 </div>
 
@@ -1301,6 +1308,32 @@ async function saveEdit() {
     showToast('❌ ' + (err.message || 'Update failed'));
   } finally {
     btn.disabled = false; btn.textContent = 'Save Changes';
+  }
+}
+
+async function deleteNest() {
+  const nest = nests.find(n => n.id === editingId);
+  if (!nest) return;
+  if (!confirm(`Delete ${nest.nest_number}? This cannot be undone.`)) return;
+
+  const btn = document.getElementById('btn-edit-delete');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+
+  try {
+    const { error } = await db.from('turtle_nests').delete().eq('id', editingId);
+    if (error) throw error;
+
+    // Remove marker from map
+    if (markers[editingId]) { markers[editingId].remove(); delete markers[editingId]; }
+    // Remove from local array
+    const idx = nests.findIndex(n => n.id === editingId);
+    if (idx !== -1) nests.splice(idx, 1);
+    closeEdit();
+    renderList();
+    showToast('🗑 Nest deleted');
+  } catch (err) {
+    showToast('❌ ' + (err.message || 'Delete failed'));
+    btn.disabled = false; btn.textContent = '🗑 Delete Nest';
   }
 }
 
