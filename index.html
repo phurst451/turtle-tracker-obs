@@ -586,7 +586,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script>
 // ─────────────────────────────────────────────
 // CONFIG — paste your anon key below
@@ -801,7 +801,7 @@ function makePopupHTML(nest) {
       : `<span style="color:${h.color}">${daysMin}–${daysMax}d</span>`;
 
   return `<div>
-    <div class="popup-title">Nest ${escHtml(nest.nest_number)}</div>
+    <div class="popup-title">${escHtml(nest.nest_number)}</div>
     <div class="popup-species" style="color:${h.color}">${h.label}</div>
     <div class="popup-countdown">${countdown}</div>
     <div class="popup-label">days to hatch window</div>
@@ -864,33 +864,158 @@ function fmtDate(s) {
   try { return `${mon[+m-1]} ${+d}, ${y}`; } catch { return s; }
 }
 
-function downloadReport() {
+// ── tile math ────────────────────────────────────────────────
+function _tileXY(lat, lng, z) {
+  const n = 2 ** z;
+  const x = Math.floor((lng + 180) / 360 * n);
+  const lr = lat * Math.PI / 180;
+  const y = Math.floor((1 - Math.log(Math.tan(lr) + 1 / Math.cos(lr)) / Math.PI) / 2 * n);
+  return [x, y];
+}
+
+async function _fetchBlob(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.status);
+  return r.blob();
+}
+
+async function _blobToImg(blob) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const u = URL.createObjectURL(blob);
+    img.onload = () => { URL.revokeObjectURL(u); res(img); };
+    img.onerror = () => { URL.revokeObjectURL(u); rej(); };
+    img.src = u;
+  });
+}
+
+async function generateMapBase64(lat, lng, zoom = 17) {
+  const [tx, ty] = _tileXY(lat, lng, zoom);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 768;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, 768, 768);
+
+  await Promise.all(
+    [-1,0,1].flatMap(dy => [-1,0,1].map(async dx => {
+      const url = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty+dy}/${tx+dx}`;
+      try {
+        const img = await _blobToImg(await _fetchBlob(url));
+        ctx.drawImage(img, (dx+1)*256, (dy+1)*256, 256, 256);
+      } catch {}
+    }))
+  );
+
+  const n = 2 ** zoom;
+  const lng0 = tx / n * 360 - 180;
+  const lng1 = (tx+1) / n * 360 - 180;
+  const merc = la => Math.log(Math.tan(Math.PI/4 + la*Math.PI/360));
+  const topLat = Math.atan(Math.sinh(Math.PI*(1-2*ty/n)))*180/Math.PI;
+  const botLat = Math.atan(Math.sinh(Math.PI*(1-2*(ty+1)/n)))*180/Math.PI;
+  const cx = Math.round(256 + (lng - lng0) / (lng1 - lng0) * 256);
+  const cy = Math.round(256 + (merc(topLat) - merc(lat)) / (merc(topLat) - merc(botLat)) * 256);
+
+  ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(220,40,40,0.9)'; ctx.fill();
+  ctx.strokeStyle = 'white'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2);
+  ctx.fillStyle = 'white'; ctx.fill();
+
+  const out = document.createElement('canvas');
+  out.width = out.height = 300;
+  out.getContext('2d').drawImage(canvas, cx-150, cy-150, 300, 300, 0, 0, 300, 300);
+  return out.toDataURL('image/png').split(',')[1];
+}
+
+async function fetchPhotoBase64(url) {
+  const blob = await _fetchBlob(url);
+  const img = await _blobToImg(blob);
+  const side = Math.min(img.width, img.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 200;
+  canvas.getContext('2d').drawImage(img,
+    Math.floor((img.width - side)/2), 0, side, side, 0, 0, 200, 200);
+  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+
+async function downloadReport() {
   const btn = document.getElementById('btn-dl-report');
-  btn.textContent = '⏳ Building…';
   btn.disabled = true;
+
   try {
-    const rows = [['Nest #','Species','Date Found','Hatch Min','Hatch Max','Nearest Street','Notes','Photo URL']];
-    const sorted = [...nests].sort((a, b) => a.date_found.localeCompare(b.date_found));
-    for (const n of sorted) {
-      rows.push([
-        n.nest_number,
-        HATCH[n.species]?.label || n.species,
-        n.date_found,
-        n.species === 'false_crawl' ? '' : n.hatch_date_min,
-        n.species === 'false_crawl' ? '' : n.hatch_date_max,
-        closestStreetName(n.latitude, n.longitude),
-        n.notes || '',
-        n.photo_url || '',
-      ]);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Nest Log');
+
+    ws.columns = [
+      { header: 'Nest #',         width: 12 },
+      { header: 'Nest Photo',     width: 19 },
+      { header: 'Location Map',   width: 24 },
+      { header: 'Nearest Street', width: 24 },
+      { header: 'Date Found',     width: 14 },
+      { header: 'Hatch Window',   width: 26 },
+    ];
+    const hdr = ws.getRow(1);
+    hdr.height = 24;
+    hdr.eachCell(c => {
+      c.font = { name:'Arial', bold:true, color:{ argb:'FFFFFFFF' }, size:10 };
+      c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FF1A3A5C' } };
+      c.alignment = { horizontal:'center', vertical:'middle' };
+    });
+
+    const sorted = [...nests].sort((a,b) => a.date_found.localeCompare(b.date_found));
+    const IMG_H = 150, PHOTO_W = 120, MAP_W = 170;
+
+    for (let i = 0; i < sorted.length; i++) {
+      const n = sorted[i];
+      const rowNum = i + 2;
+      btn.textContent = `⏳ ${i+1} / ${sorted.length}…`;
+
+      const isFc = n.species === 'false_crawl';
+      const hatch = isFc ? 'False Crawl'
+        : `${fmtDate(n.hatch_date_min)} – ${fmtDate(n.hatch_date_max)}`;
+
+      const row = ws.addRow([n.nest_number, '', '', closestStreetName(n.latitude, n.longitude),
+        fmtDate(n.date_found), hatch]);
+      row.height = IMG_H;
+      row.eachCell(c => {
+        c.font = { name:'Arial', size:10 };
+        c.alignment = { vertical:'middle', wrapText:true };
+        c.border = {
+          top:{style:'thin',color:{argb:'FFCCCCCC'}}, bottom:{style:'thin',color:{argb:'FFCCCCCC'}},
+          left:{style:'thin',color:{argb:'FFCCCCCC'}}, right:{style:'thin',color:{argb:'FFCCCCCC'}}
+        };
+        if (i % 2) c.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:'FFEAF2FB' } };
+      });
+      row.getCell(1).font = { name:'Arial', bold:true, size:10 };
+
+      // Photo
+      if (n.photo_url) {
+        try {
+          const b64 = await fetchPhotoBase64(n.photo_url);
+          const id = wb.addImage({ base64: b64, extension: 'jpeg' });
+          ws.addImage(id, { tl:{col:1,row:rowNum-1}, ext:{width:PHOTO_W,height:IMG_H}, editAs:'oneCell' });
+        } catch {}
+      }
+
+      // Map
+      try {
+        const b64 = await generateMapBase64(n.latitude, n.longitude);
+        const id = wb.addImage({ base64: b64, extension: 'png' });
+        ws.addImage(id, { tl:{col:2,row:rowNum-1}, ext:{width:MAP_W,height:IMG_H}, editAs:'oneCell' });
+      } catch {}
     }
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    // Column widths
-    ws['!cols'] = [14,14,13,13,13,22,20,40].map(w => ({ wch: w }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Nest Log');
-    XLSX.writeFile(wb, `Turtle_Nest_Log_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `Turtle_Nest_Log_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.click();
+
   } catch(e) {
     showToast('❌ Export failed: ' + e.message);
+    console.error(e);
   } finally {
     btn.textContent = '⬇️ Download Excel Spreadsheet';
     btn.disabled = false;
@@ -1192,7 +1317,7 @@ function renderList() {
       ? `Date: ${fmtDate(nest.date_found)}`
       : `Found: ${fmtDate(nest.date_found)}<br>Hatch: ${fmtDate(nest.hatch_date_min)} – ${fmtDate(nest.hatch_date_max)}`;
 
-    const titlePrefix = isFalseCrawl ? '' : 'Nest ';
+    const titlePrefix = '';
 
     const card = document.createElement('div');
     card.className = `nest-card ${nest.species}`;
