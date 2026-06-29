@@ -132,6 +132,21 @@
     .list-header h2 { font-size: 15px; font-weight: 700; }
     .nest-count { font-size: 12px; color: var(--muted); }
 
+    .sort-bar {
+      display: flex; gap: 6px;
+      padding: 0 16px 10px;
+    }
+    .sort-pill {
+      flex: 1; padding: 5px 4px;
+      border: 1.5px solid var(--surface2); border-radius: 20px;
+      background: none; color: var(--muted);
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      text-align: center; transition: all .15s;
+    }
+    .sort-pill.active {
+      border-color: var(--accent); color: var(--accent);
+      background: rgba(0,200,255,.08);
+    }
     .species-legend {
       display: flex; gap: 12px;
       padding: 0 16px 12px;
@@ -436,6 +451,11 @@
     <div class="list-header">
       <h2>All Nests</h2>
       <span class="nest-count" id="nest-count">0 nests</span>
+    </div>
+    <div class="sort-bar">
+      <button class="sort-pill active" id="sort-num"  onclick="setSort('num')">Nest #</button>
+      <button class="sort-pill"        id="sort-north" onclick="setSort('north')">N → S</button>
+      <button class="sort-pill"        id="sort-south" onclick="setSort('south')">S → N</button>
     </div>
     <div class="species-legend">
       <div class="legend-item"><div class="legend-dot" style="background:var(--loggerhead)"></div>Loggerhead</div>
@@ -1267,6 +1287,22 @@ document.getElementById('edit-overlay').addEventListener('click', e => {
 
 // LIST
 // ─────────────────────────────────────────────
+let currentSort = 'num';
+function setSort(s) {
+  currentSort = s;
+  document.querySelectorAll('.sort-pill').forEach(p => p.classList.remove('active'));
+  document.getElementById('sort-' + s).classList.add('active');
+  renderList();
+}
+
+function sortedNests() {
+  const copy = [...nests];
+  if (currentSort === 'north') return copy.sort((a, b) => b.latitude - a.latitude);
+  if (currentSort === 'south') return copy.sort((a, b) => a.latitude - b.latitude);
+  // nest number: natural sort
+  return copy.sort((a, b) => a.nest_number.localeCompare(b.nest_number, undefined, { numeric: true }));
+}
+
 function renderList() {
   const list = document.getElementById('nest-list');
   const empty = document.getElementById('empty-state');
@@ -1281,7 +1317,7 @@ function renderList() {
   // Remove old cards (keep empty state)
   list.querySelectorAll('.nest-card').forEach(el => el.remove());
 
-  nests.forEach(nest => {
+  sortedNests().forEach(nest => {
     const h = HATCH[nest.species] || HATCH.loggerhead;
     const isFalseCrawl = nest.species === 'false_crawl';
 
