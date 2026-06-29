@@ -278,7 +278,7 @@
     }
     .photo-drop:active { border-color: var(--accent); }
     .photo-drop input[type="file"] {
-      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+      display: none;
     }
     .photo-preview-img {
       width: 100%; border-radius: 6px;
@@ -1168,17 +1168,16 @@ async function handlePhotoFile(file) {
   }
 }
 
-// Tap to pick — standard file dialog
-document.getElementById('photo-input').addEventListener('change', e => {
-  if (e.target.files[0]) handlePhotoFile(e.target.files[0]);
-});
-
-// Drag and drop — prevent input from double-firing by stopping propagation on the input's drop
 const photoInput = document.getElementById('photo-input');
 const photoDrop  = document.getElementById('photo-drop');
 
-photoInput.addEventListener('drop', e => { e.stopPropagation(); });
+// Tap/click → open file picker
+photoDrop.addEventListener('click', () => photoInput.click());
+photoInput.addEventListener('change', e => {
+  if (e.target.files[0]) handlePhotoFile(e.target.files[0]);
+});
 
+// Drag and drop — only the div handles it; input is hidden so it never intercepts
 photoDrop.addEventListener('dragover', e => { e.preventDefault(); photoDrop.style.borderColor = 'var(--accent)'; });
 photoDrop.addEventListener('dragleave', e => { if (!photoDrop.contains(e.relatedTarget)) photoDrop.style.borderColor = ''; });
 photoDrop.addEventListener('drop', e => {
