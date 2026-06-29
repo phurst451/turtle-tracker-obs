@@ -1137,19 +1137,20 @@ async function handlePhotoFile(file) {
   }
 
   try {
-    const exif = await exifr.parse(file, { gps: true, tiff: true, ifd0: true, exif: true });
-    if (!exif) return;
+    // Use gps() for coordinates (more reliable than parse with options)
+    const gps = await exifr.gps(file).catch(() => null);
+    const exif = await exifr.parse(file, { pick: ['DateTimeOriginal', 'CreateDate', 'DateTime'] }).catch(() => null);
 
     let filled = [];
 
-    if (exif.latitude != null && exif.longitude != null) {
-      pendingLatLng = L.latLng(exif.latitude, exif.longitude);
+    if (gps && gps.latitude != null && gps.longitude != null) {
+      pendingLatLng = L.latLng(gps.latitude, gps.longitude);
       updateCoordDisplay();
       placePreviewPin(pendingLatLng);
       filled.push('📍 GPS');
     }
 
-    const dateSrc = exif.DateTimeOriginal || exif.CreateDate || exif.DateTime;
+    const dateSrc = exif && (exif.DateTimeOriginal || exif.CreateDate || exif.DateTime);
     if (dateSrc) {
       const d = dateSrc instanceof Date ? dateSrc : new Date(dateSrc);
       if (!isNaN(d)) {
@@ -1162,9 +1163,14 @@ async function handlePhotoFile(file) {
       }
     }
 
-    if (filled.length) showToast(`✅ Auto-filled from photo: ${filled.join(', ')}`);
+    if (filled.length) {
+      showToast(`✅ Auto-filled: ${filled.join(', ')}`);
+    } else {
+      showToast('📷 Photo added — no GPS/date in this image', 3000);
+    }
   } catch (err) {
     console.warn('EXIF read failed:', err);
+    showToast('📷 Photo added');
   }
 }
 
