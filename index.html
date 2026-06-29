@@ -188,6 +188,7 @@
     .nest-card-title { font-size: 14px; font-weight: 700; }
     .nest-card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; text-transform: capitalize; }
     .nest-card-dates { font-size: 11px; color: var(--muted); margin-top: 5px; }
+    .nest-card-note { font-size: 11px; font-weight: 400; color: var(--muted); }
 
     .days-badge {
       flex-shrink: 0;
@@ -464,7 +465,8 @@
       <span class="nest-count" id="nest-count">0 nests</span>
     </div>
     <div class="sort-bar">
-      <button class="sort-pill active" id="sort-num"  onclick="setSort('num')">Nest #</button>
+      <button class="sort-pill active" id="sort-num"   onclick="setSort('num')">Nest #</button>
+      <button class="sort-pill"        id="sort-due"   onclick="setSort('due')">Due ↑</button>
       <button class="sort-pill"        id="sort-north" onclick="setSort('north')">N → S</button>
       <button class="sort-pill"        id="sort-south" onclick="setSort('south')">S → N</button>
     </div>
@@ -1396,7 +1398,7 @@ function sortedNests() {
   const copy = [...nests];
   if (currentSort === 'north') return copy.sort((a, b) => b.latitude - a.latitude);
   if (currentSort === 'south') return copy.sort((a, b) => a.latitude - b.latitude);
-  // nest number: natural sort
+  if (currentSort === 'due')   return copy.sort((a, b) => (a.hatch_date_min || a.date_found).localeCompare(b.hatch_date_min || b.date_found));
   return copy.sort((a, b) => a.nest_number.localeCompare(b.nest_number, undefined, { numeric: true }));
 }
 
@@ -1457,7 +1459,7 @@ function renderList() {
     card.innerHTML = `
       ${thumbHTML}
       <div class="nest-card-body">
-        <div class="nest-card-title">${titlePrefix}${escHtml(nest.nest_number)}</div>
+        <div class="nest-card-title">${titlePrefix}${escHtml(nest.nest_number)}${nest.notes ? `<span class="nest-card-note"> | Note: ${escHtml(nest.notes)}</span>` : ''}</div>
         <div class="nest-card-sub" style="color:${h.color}">${h.label}</div>
         <div class="nest-card-dates">${datesHTML}</div>
         <div class="nest-card-actions">
