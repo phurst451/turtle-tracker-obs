@@ -1096,10 +1096,42 @@ function showPhotoPreview(file) {
   reader.readAsDataURL(file);
 }
 
+async function toJpegBlob(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('canvas toBlob failed')), 'image/jpeg', 0.92);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.src = url;
+  });
+}
+
 async function handlePhotoFile(file) {
   if (!file) return;
-  pendingPhoto = file;
   showPhotoPreview(file);
+
+  // Transcode HEIC/non-JPEG → JPEG so browsers can display thumbnails
+  const needsTranscode = file.type === 'image/heic' || file.type === 'image/heif' ||
+                         !file.type.startsWith('image/jpeg') && !file.type.startsWith('image/png') &&
+                         !file.type.startsWith('image/webp');
+  if (needsTranscode) {
+    try {
+      const blob = await toJpegBlob(file);
+      pendingPhoto = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' });
+    } catch (e) {
+      console.warn('Transcode failed, uploading original:', e);
+      pendingPhoto = file;
+    }
+  } else {
+    pendingPhoto = file;
+  }
 
   try {
     const exif = await exifr.parse(file, { gps: true, tiff: true, ifd0: true, exif: true });
