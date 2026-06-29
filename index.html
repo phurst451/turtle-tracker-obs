@@ -766,25 +766,48 @@ function setPlacingMode(on) {
   map.getContainer().style.cursor = on ? 'crosshair' : '';
 }
 
-function makeIcon(species) {
-  const color = HATCH[species]?.color || '#888';
-  const emoji = species === 'false_crawl' ? '👣' : '🐢';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
-    <path d="M14 0C6.268 0 0 6.268 0 14c0 9.333 14 22 14 22S28 23.333 28 14C28 6.268 21.732 0 14 0z" fill="${color}"/>
-    <circle cx="14" cy="14" r="7" fill="white" opacity=".9"/>
-    <text x="14" y="18" text-anchor="middle" font-size="10" font-weight="bold" fill="${color}">${emoji}</text>
+function markerUrgencyColor(nest) {
+  if (nest.species === 'false_crawl') return '#64748b';
+  const dMin = daysUntil(nest.hatch_date_min);
+  const dMax = daysUntil(nest.hatch_date_max);
+  if (dMax <= 0) return '#64748b';
+  if (dMin <= 0) return '#ef4444';
+  if (dMin <= 7)  return '#f97316';
+  if (dMin <= 14) return '#eab308';
+  return HATCH[nest.species]?.color || '#888';
+}
+
+function markerDaysLabel(nest) {
+  if (nest.species === 'false_crawl') return 'FC';
+  const dMin = daysUntil(nest.hatch_date_min);
+  const dMax = daysUntil(nest.hatch_date_max);
+  if (dMax <= 0) return 'Hatched';
+  if (dMin <= 0) return `≤${dMax}d`;
+  return `${dMin}d`;
+}
+
+function makeIcon(nest) {
+  const color  = markerUrgencyColor(nest);
+  const label  = escHtml(nest.nest_number);
+  const days   = markerDaysLabel(nest);
+  const W = 62, H = 46, R = 7, PH = 10; // width, height, corner radius, pointer height
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect x="1" y="1" width="${W-2}" height="${H-PH-2}" rx="${R}" fill="${color}"/>
+    <polygon points="${W/2-7},${H-PH} ${W/2},${H-1} ${W/2+7},${H-PH}" fill="${color}"/>
+    <text x="${W/2}" y="17" text-anchor="middle" font-size="12" font-weight="700" fill="white" font-family="-apple-system,sans-serif">${label}</text>
+    <text x="${W/2}" y="30" text-anchor="middle" font-size="10" fill="rgba(255,255,255,.85)" font-family="-apple-system,sans-serif">${days}</text>
   </svg>`;
   return L.divIcon({
     html: svg,
     className: '',
-    iconSize: [28, 36],
-    iconAnchor: [14, 36],
-    popupAnchor: [0, -36],
+    iconSize: [W, H],
+    iconAnchor: [W/2, H],
+    popupAnchor: [0, -H],
   });
 }
 
 function addMarker(nest) {
-  const m = L.marker([nest.latitude, nest.longitude], { icon: makeIcon(nest.species), draggable: true });
+  const m = L.marker([nest.latitude, nest.longitude], { icon: makeIcon(nest), draggable: true });
   m.bindPopup(() => makePopupHTML(nest), { maxWidth: 240 });
   let preDragLatLng = null;
   m.on('dragstart', () => { preDragLatLng = m.getLatLng(); });
@@ -1342,6 +1365,7 @@ async function saveEdit() {
     Object.assign(nest, { nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max });
     renderList();
     if (markers[editingId]) {
+      markers[editingId].setIcon(makeIcon(nest));
       markers[editingId].setPopupContent(makePopupHTML(nest));
     }
     closeEdit();
