@@ -1069,6 +1069,24 @@ function selectSpecies(sp, btn) {
 document.getElementById('date-found').addEventListener('change', updateHatchPreview);
 document.getElementById('date-found').value = todayStr();
 
+function autoFormatNestNumber(input) {
+  let v = input.value.trim().toUpperCase();
+  if (!v || v === 'FC') return;
+  // Bare number like "441" or "47" → N441, N047
+  if (/^\d+$/.test(v)) {
+    input.value = 'N' + v.padStart(3, '0');
+  }
+  // Already N-prefixed like "N47" → N047
+  else if (/^N\d+$/.test(v)) {
+    input.value = 'N' + v.slice(1).padStart(3, '0');
+  }
+}
+
+['nest-number', 'edit-nest-number'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('blur', () => autoFormatNestNumber(el));
+});
+
 function updateHatchPreview() {
   const dateVal = document.getElementById('date-found').value;
   const preview = document.getElementById('hatch-preview');
