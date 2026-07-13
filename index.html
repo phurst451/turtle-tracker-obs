@@ -55,6 +55,7 @@
     body.view-only #nav-add,
     body.view-only #nav-report,
     body.view-only .btn-edit,
+    body.view-only .view-only-hide,
     body.view-only #fab { display: none !important; }
 
     nav {
@@ -587,6 +588,7 @@
     <div class="share-card" id="share-card"></div>
     <div class="share-overlay-actions">
       <button class="btn-close-share" onclick="closeShare()">Close</button>
+      <button class="btn-close-share view-only-hide" onclick="closeShare();openEdit(sharingId)">✏️ Edit</button>
       <button class="btn-screenshot-hint" onclick="closeShare()">📸 Screenshot to share</button>
     </div>
   </div>
@@ -1344,6 +1346,7 @@ function resetForm() {
 // EDIT
 // ─────────────────────────────────────────────
 let editingId = null;
+let sharingId = null;
 
 function openEdit(id) {
   const nest = nests.find(n => n.id === id);
@@ -1548,6 +1551,7 @@ function renderList() {
 function openShare(id) {
   const nest = nests.find(n => n.id === id);
   if (!nest) return;
+  sharingId = id;
   const h = HATCH[nest.species];
   const dMin = daysUntil(nest.hatch_date_min);
   const dMax = daysUntil(nest.hatch_date_max);
