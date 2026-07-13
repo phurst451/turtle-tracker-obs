@@ -821,7 +821,7 @@ function makeIcon(nest) {
 
 function addMarker(nest) {
   const m = L.marker([nest.latitude, nest.longitude], { icon: makeIcon(nest), draggable: true });
-  m.bindPopup(() => makePopupHTML(nest), { maxWidth: 240 });
+  m.on('click', () => openShare(nest.id));
   let preDragLatLng = null;
   m.on('dragstart', () => { preDragLatLng = m.getLatLng(); });
   m.on('dragend', async () => {
@@ -1297,7 +1297,7 @@ async function submitNest() {
     resetForm();
     switchTab('map');
     map.setView([data.latitude, data.longitude], 16);
-    markers[data.id].openPopup();
+    openShare(data.id);
     showToast(isFalseCrawl ? '👣 False crawl logged!' : '🐢 Nest saved!');
   } catch (err) {
     console.error(err);
@@ -1380,7 +1380,6 @@ async function saveEdit() {
     renderList();
     if (markers[editingId]) {
       markers[editingId].setIcon(makeIcon(nest));
-      markers[editingId].setPopupContent(makePopupHTML(nest));
     }
     closeEdit();
     showToast('✅ Nest updated!');
@@ -1515,7 +1514,7 @@ function renderList() {
       switchTab('map');
       if (markers[nest.id]) {
         map.setView([nest.latitude, nest.longitude], 16);
-        setTimeout(() => markers[nest.id].openPopup(), 300);
+        setTimeout(() => openShare(nest.id), 300);
       }
     });
 
