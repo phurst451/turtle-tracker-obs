@@ -608,6 +608,20 @@
       <label for="edit-notes">Notes</label>
       <textarea id="edit-notes" style="min-height:60px"></textarea>
     </div>
+    <div class="edit-row">
+      <label for="edit-hatch-date">Actual Hatch Date</label>
+      <input type="date" id="edit-hatch-date" />
+    </div>
+    <div class="edit-row" style="flex-direction:row;gap:12px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+        <label for="edit-num-hatchlings">Hatchlings</label>
+        <input type="number" id="edit-num-hatchlings" min="0" placeholder="0" />
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px">
+        <label for="edit-whole-eggs">Whole Eggs Left</label>
+        <input type="number" id="edit-whole-eggs" min="0" placeholder="0" />
+      </div>
+    </div>
     <button class="btn-edit-save" id="btn-edit-save" onclick="saveEdit()">Save Changes</button>
     <button class="btn-edit-cancel" onclick="closeEdit()">Cancel</button>
     <button class="btn-edit-delete" id="btn-edit-delete" onclick="deleteNest()">🗑 Delete Nest</button>
@@ -1335,9 +1349,12 @@ function openEdit(id) {
   const nest = nests.find(n => n.id === id);
   if (!nest) return;
   editingId = id;
-  document.getElementById('edit-nest-number').value = nest.nest_number;
-  document.getElementById('edit-date-found').value  = nest.date_found;
-  document.getElementById('edit-notes').value       = nest.notes || '';
+  document.getElementById('edit-nest-number').value    = nest.nest_number;
+  document.getElementById('edit-date-found').value     = nest.date_found;
+  document.getElementById('edit-notes').value          = nest.notes || '';
+  document.getElementById('edit-hatch-date').value     = nest.hatch_date || '';
+  document.getElementById('edit-num-hatchlings').value = nest.num_hatchlings ?? '';
+  document.getElementById('edit-whole-eggs').value     = nest.whole_eggs_remaining ?? '';
   document.getElementById('edit-overlay').classList.add('visible');
 }
 
@@ -1349,7 +1366,10 @@ function closeEdit() {
 async function saveEdit() {
   const nestNumber = document.getElementById('edit-nest-number').value.trim();
   const dateFound  = document.getElementById('edit-date-found').value;
-  const notes      = document.getElementById('edit-notes').value.trim();
+  const notes               = document.getElementById('edit-notes').value.trim();
+  const hatch_date          = document.getElementById('edit-hatch-date').value || null;
+  const num_hatchlings      = document.getElementById('edit-num-hatchlings').value !== '' ? parseInt(document.getElementById('edit-num-hatchlings').value) : null;
+  const whole_eggs_remaining = document.getElementById('edit-whole-eggs').value !== '' ? parseInt(document.getElementById('edit-whole-eggs').value) : null;
   if (!nestNumber) { showToast('⚠️ Enter a nest number'); return; }
   if (!dateFound)  { showToast('⚠️ Enter a date');        return; }
 
@@ -1371,12 +1391,12 @@ async function saveEdit() {
 
   try {
     const { error } = await db.from('turtle_nests')
-      .update({ nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max })
+      .update({ nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max, hatch_date, num_hatchlings, whole_eggs_remaining })
       .eq('id', editingId);
     if (error) throw error;
 
     // Update local state
-    Object.assign(nest, { nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max });
+    Object.assign(nest, { nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max, hatch_date, num_hatchlings, whole_eggs_remaining });
     renderList();
     if (markers[editingId]) {
       markers[editingId].setIcon(makeIcon(nest));
@@ -1568,9 +1588,12 @@ function openShare(id) {
       <div class="label">Found</div>
       <div class="value">${fmtDate(nest.date_found)}</div>
     </div>
+    ${nest.notes ? `<div class="share-card-row"><div class="label">Notes</div><div class="value" style="font-size:13px">${escHtml(nest.notes)}</div></div>` : ''}
     <div class="share-card-countdown">${countdownHTML}</div>
     <div class="share-card-footer">
       Hatch window: ${fmtDate(nest.hatch_date_min)} – ${fmtDate(nest.hatch_date_max)}<br>
+      ${nest.hatch_date ? `Actual hatch: ${fmtDate(nest.hatch_date)}<br>` : ''}
+      ${nest.num_hatchlings != null ? `Hatchlings: ${nest.num_hatchlings}` : ''}${nest.whole_eggs_remaining != null ? ` &nbsp;·&nbsp; Whole eggs left: ${nest.whole_eggs_remaining}` : ''}<br>
       Tracked by Ormond by the Sea Turtle Watchers 🏖️
     </div>
   `;
