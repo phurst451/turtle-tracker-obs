@@ -5,14 +5,14 @@ _Last verified 2026-07-28._
 ## What This Is
 A mobile-first sea turtle nest tracking web app for volunteer monitors on the beach stretch from Al Weeks Park to Verona Lookout Tower in Ormond by the Sea, FL.
 
-## ⚠️ Current blocker — the backend is gone
-`limdyowwnlleyyswwkeo.supabase.co` returns **NXDOMAIN** (verified 2026-07-28). Not a network problem — `supabase.co` itself resolves fine. Supabase free-tier projects are **paused after ~7 days of inactivity**, and a paused project's subdomain stops resolving.
+## Backend status — restored 2026-07-28
+Earlier on 2026-07-28 `limdyowwnlleyyswwkeo.supabase.co` returned **NXDOMAIN** — the free-tier project had been **paused after ~7 days of inactivity**, which drops the subdomain from DNS. The app still loaded and drew the map but showed **zero nests**.
 
-Until it's restored the app loads, draws the map, and shows **zero nests**.
+It is now **back up**: 27 nests (25 loggerhead, 1 green, 1 false crawl), date range 2026-05-01 → 2026-06-29, all with coordinates, 22 photos.
 
-**To fix:** sign in at https://supabase.com/dashboard → find project `turtle-tracker` → **Restore**. If it was deleted rather than paused, recreate it and re-run `supabase-setup.sql`, then update `SUPABASE_URL` / `SUPABASE_ANON_KEY` at the top of the `<script>` block in `index.html` (~line 660).
+**If it happens again:** https://supabase.com/dashboard → project `turtle-tracker` → **Restore**. Check with `dig +short limdyowwnlleyyswwkeo.supabase.co` — empty output means the host is gone. If it was deleted rather than paused, recreate it, run `supabase-setup.sql`, then update `SUPABASE_URL` / `SUPABASE_ANON_KEY` in `index.html` (~line 660) and `make_nest_report.py`.
 
-**To avoid it recurring:** anything that touches the DB weekly resets the inactivity clock — the simplest is a cron'd `curl` of the REST endpoint.
+**It should not happen again** — the twice-weekly `backup.sh` job now keeps the inactivity clock reset (deploy-checklist §C).
 
 ## Live URL
 **https://turtle-tracker-obs.netlify.app/**
@@ -83,7 +83,8 @@ public.turtle_nests (
 `make_nest_report.py` pulls from Supabase and builds `Turtle_Nest_Log.xlsx` (photos, map thumbnails, nearest-street lookup). The committed `Turtle_Nest_Log.xlsx` is a **snapshot of 14 nests as of 2026-06-16** — useful as a partial reference, but it holds no coordinates, species, or notes, so it is **not** a restore source.
 
 ## Known Issues / To-Do
-- **No backup of the nest data.** Everything lives in one free-tier Supabase project that just vanished from DNS. A weekly export (`make_nest_report.py`, or a plain REST dump to JSON) is the single highest-value thing left to add.
+- ⚠️ **The live DB is missing `hatch_date`, `num_hatchlings`, `whole_eggs_remaining`** — the edit form writes them, PostgREST returns `42703 column does not exist`, so **Save Changes in the edit form has never worked** against this project. Fix: run `migration-add-hatch-outcome-columns.sql` in the Supabase SQL Editor. Verified against the live DB 2026-07-28.
+- ~~No backup of the nest data.~~ **Solved 2026-07-28** — `backup.sh` on a launchd schedule (Sun + Wed) dumps the table to `~/turtle-nest-backups/` and pulls down photos, and the same request keeps the project from pausing. See deploy-checklist §C.
 - Storage RLS on `nest-photos` allows public INSERT/DELETE — fine for trusted community use, worth tightening if it goes wider
 - No authentication (intentional — all monitors share one view)
 - Hatch-date columns are nullable (added after the initial table) — could be tightened with a migration

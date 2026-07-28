@@ -7,7 +7,11 @@
 CREATE TABLE IF NOT EXISTS public.turtle_nests (
   id                   UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   nest_number          TEXT        NOT NULL,
-  species              TEXT        NOT NULL CHECK (species IN ('loggerhead', 'leatherback', 'green')),
+  -- 'false_crawl' is a real logged outcome (turtle came ashore, laid nothing).
+  -- The app has a dedicated button for it and 1 such row exists live, but this
+  -- constraint used to omit it — recreating from this file would have rejected
+  -- every false crawl.
+  species              TEXT        NOT NULL CHECK (species IN ('loggerhead', 'leatherback', 'green', 'false_crawl')),
   date_found           DATE        NOT NULL,
   latitude             DOUBLE PRECISION NOT NULL,
   longitude            DOUBLE PRECISION NOT NULL,

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.phillip.turtle-backup</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/PhillipHurst/Developer/personal-tools/turtle-tracker/backup.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/PhillipHurst/Developer/personal-tools/turtle-tracker</string>
+
+  <!-- Sunday and Wednesday at 11:00.
+
+       Deliberately twice a week, not weekly: Supabase pauses a free project
+       after ~7 days idle, so a 7-day job has zero margin — one run missed
+       because the Mac was off is enough to let it pause again. Two runs 3-4
+       days apart survive a missed one. For a true weekly job, delete the
+       second dict below.
+
+       launchd runs a missed job when the Mac next wakes, so sleep is fine;
+       being fully powered off across the window is what this guards. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict>
+      <key>Weekday</key><integer>0</integer>
+      <key>Hour</key><integer>11</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+    <dict>
+      <key>Weekday</key><integer>3</integer>
+      <key>Hour</key><integer>11</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+  </array>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/PhillipHurst/turtle-nest-backups/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/PhillipHurst/turtle-nest-backups/launchd.err.log</string>
+</dict>
+</plist>

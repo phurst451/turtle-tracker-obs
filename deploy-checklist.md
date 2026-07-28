@@ -52,14 +52,47 @@ Empty output = the host is gone.
 
 ---
 
-## C. Keeping it from pausing again
+## C. Automatic backup + keep-alive — **installed 2026-07-28**
 
-Any DB request resets the 7-day inactivity timer. A weekly cron is enough:
+`backup.sh` runs on a launchd schedule and does both jobs at once: it dumps `turtle_nests` to a dated JSON file and downloads any new nest photos, and the request itself resets Supabase's ~7-day inactivity timer.
+
+| | |
+|---|---|
+| Script | `backup.sh` (reads the Supabase URL + anon key straight out of `index.html`, so there's one source of truth) |
+| Schedule | **Sunday and Wednesday, 11:00** — see note below |
+| Backups | `~/turtle-nest-backups/` — `nests-YYYY-MM-DD.json` + `photos/` |
+| Log | `~/turtle-nest-backups/backup.log` |
+| Job | `~/Library/LaunchAgents/com.phillip.turtle-backup.plist` (copy kept in this repo) |
+
+**Why twice a week and not weekly:** the pause threshold is ~7 days, so a 7-day job has zero margin — one run missed because the Mac was off is enough to let the project pause. Two runs 3–4 days apart survive a missed one. For a true weekly job, delete the second `<dict>` from the plist.
+
+**⚠️ Do not point the backups at `~/Documents`, `~/Desktop` or `~/Downloads`.** macOS TCC blocks launchd agents from writing there. The job still "succeeds" as far as launchd is concerned and writes nothing — this bit us during setup. `~/` itself is unprotected, which is why backups live there.
+
+### Useful commands
 ```bash
-curl -s -o /dev/null -H "apikey: $TURTLE_ANON_KEY" \
-  "https://YOUR-PROJECT.supabase.co/rest/v1/turtle_nests?select=id&limit=1"
+./backup.sh                                                    # run it now
+tail -20 ~/turtle-nest-backups/backup.log                      # what happened last
+launchctl list | grep turtle                                   # middle column is the last exit code; 0 is good
+launchctl kickstart -p gui/$(id -u)/com.phillip.turtle-backup  # force a scheduled run
 ```
-Better still, make that same job dump the table to a dated JSON file — right now the nest data has **no backup anywhere**.
+
+### Reinstalling the job
+```bash
+cp com.phillip.turtle-backup.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.phillip.turtle-backup.plist
+```
+
+### Restoring from a backup
+The JSON is the full table — every column, including coordinates. To reload it into a fresh project after running `supabase-setup.sql`:
+```bash
+URL=$(sed -n "s/.*const SUPABASE_URL[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" index.html | head -1)
+KEY=$(sed -n "s/.*const SUPABASE_ANON_KEY[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" index.html | head -1)
+curl -X POST "$URL/rest/v1/turtle_nests" \
+  -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  --data-binary @~/turtle-nest-backups/nests-YYYY-MM-DD.json
+```
+Photos would need re-uploading to the `nest-photos` bucket and the `photo_url` values rewritten to the new project's domain.
 
 ---
 
