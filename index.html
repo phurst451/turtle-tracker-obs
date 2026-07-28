@@ -624,6 +624,14 @@
         <input type="number" id="edit-whole-eggs" min="0" placeholder="0" />
       </div>
     </div>
+    <div class="edit-row">
+      <label>Photo</label>
+      <div class="photo-drop" id="edit-photo-drop" style="min-height:48px">
+        <span class="photo-drop-label" id="edit-photo-drop-label">📷 Tap to add / replace photo</span>
+        <img class="photo-preview-img" id="edit-photo-preview" />
+        <input type="file" id="edit-photo-input" accept="image/*,image/heic,image/heif" style="display:none" />
+      </div>
+    </div>
     <button class="btn-edit-save" id="btn-edit-save" onclick="saveEdit()">Save Changes</button>
     <button class="btn-edit-cancel" onclick="closeEdit()">Cancel</button>
     <button class="btn-edit-delete" id="btn-edit-delete" onclick="deleteNest()">🗑 Delete Nest</button>
@@ -678,6 +686,7 @@ let nests = [];
 let pendingLatLng = null;
 let selectedSpecies = null;
 let pendingPhoto = null;
+let pendingEditPhoto = null;
 let placingMode = false;
 let markers = {};   // id → leaflet marker
 
@@ -1248,6 +1257,38 @@ photoDrop.addEventListener('drop', e => {
   if (file) handlePhotoFile(file);
 });
 
+// ── Edit photo picker ──
+async function handleEditPhotoFile(file) {
+  if (!file) return;
+  const isHeic = file.type === 'image/heic' || file.type === 'image/heif' ||
+                 /\.heic$/i.test(file.name) || /\.heif$/i.test(file.name);
+  if (isHeic && typeof heic2any !== 'undefined') {
+    try {
+      const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+      const jpegBlob = Array.isArray(blob) ? blob[0] : blob;
+      pendingEditPhoto = new File([jpegBlob], file.name.replace(/\.[^.]+$/i, '.jpg'), { type: 'image/jpeg' });
+    } catch { pendingEditPhoto = file; }
+  } else {
+    pendingEditPhoto = file;
+  }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = document.getElementById('edit-photo-preview');
+    img.src = ev.target.result;
+    img.style.display = 'block';
+    document.getElementById('edit-photo-drop-label').style.display = 'none';
+  };
+  reader.readAsDataURL(pendingEditPhoto);
+}
+
+const editPhotoInput = document.getElementById('edit-photo-input');
+const editPhotoDrop  = document.getElementById('edit-photo-drop');
+editPhotoDrop.addEventListener('click', () => editPhotoInput.click());
+editPhotoInput.addEventListener('change', e => { if (e.target.files[0]) handleEditPhotoFile(e.target.files[0]); });
+editPhotoDrop.addEventListener('dragover', e => { e.preventDefault(); editPhotoDrop.style.borderColor = 'var(--accent)'; });
+editPhotoDrop.addEventListener('dragleave', e => { if (!editPhotoDrop.contains(e.relatedTarget)) editPhotoDrop.style.borderColor = ''; });
+editPhotoDrop.addEventListener('drop', e => { e.preventDefault(); editPhotoDrop.style.borderColor = ''; const f = e.dataTransfer.files[0]; if (f) handleEditPhotoFile(f); });
+
 function updateCoordDisplay() {
   const el = document.getElementById('coord-text');
   if (pendingLatLng) {
@@ -1358,6 +1399,18 @@ function openEdit(id) {
   document.getElementById('edit-hatch-date').value     = nest.hatch_date || '';
   document.getElementById('edit-num-hatchlings').value = nest.num_hatchlings ?? '';
   document.getElementById('edit-whole-eggs').value     = nest.whole_eggs_remaining ?? '';
+  // Reset photo picker
+  pendingEditPhoto = null;
+  editPhotoInput.value = '';
+  const editPreview = document.getElementById('edit-photo-preview');
+  if (nest.photo_url) {
+    editPreview.src = nest.photo_url;
+    editPreview.style.display = 'block';
+    document.getElementById('edit-photo-drop-label').style.display = 'none';
+  } else {
+    editPreview.style.display = 'none';
+    document.getElementById('edit-photo-drop-label').style.display = '';
+  }
   document.getElementById('edit-overlay').classList.add('visible');
 }
 
@@ -1393,13 +1446,22 @@ async function saveEdit() {
   }
 
   try {
+    // Upload new photo if selected
+    let photo_url = nest.photo_url;
+    if (pendingEditPhoto) {
+      const path = `${Date.now()}.${pendingEditPhoto.name.split('.').pop() || 'jpg'}`;
+      const { error: upErr } = await db.storage.from('nest-photos').upload(path, pendingEditPhoto, { contentType: pendingEditPhoto.type });
+      if (upErr) throw upErr;
+      photo_url = db.storage.from('nest-photos').getPublicUrl(path).data.publicUrl;
+    }
+
     const { error } = await db.from('turtle_nests')
-      .update({ nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max, hatch_date, num_hatchlings, whole_eggs_remaining })
+      .update({ nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max, hatch_date, num_hatchlings, whole_eggs_remaining, photo_url })
       .eq('id', editingId);
     if (error) throw error;
 
     // Update local state
-    Object.assign(nest, { nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max, hatch_date, num_hatchlings, whole_eggs_remaining });
+    Object.assign(nest, { nest_number: nestNumber, date_found: dateFound, notes, hatch_date_min, hatch_date_max, hatch_date, num_hatchlings, whole_eggs_remaining, photo_url });
     renderList();
     if (markers[editingId]) {
       markers[editingId].setIcon(makeIcon(nest));
