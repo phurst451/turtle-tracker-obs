@@ -51,6 +51,21 @@
     header .subtitle { font-size: 11px; color: var(--muted); }
     .view-badge { font-size: 10px; font-weight: 700; background: var(--accent); color: #fff; padding: 2px 7px; border-radius: 99px; letter-spacing: .04em; }
 
+    /* ── Offline / backend-unreachable banner ── */
+    #offline-banner {
+      display: none;
+      background: var(--danger);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.35;
+      padding: 8px 14px;
+      flex-shrink: 0;
+      z-index: 9;
+    }
+    #offline-banner.visible { display: block; }
+    #offline-banner strong { display: block; font-size: 13px; margin-bottom: 1px; }
+    body.offline #fab { opacity: .4; pointer-events: none; }
+
     /* ── View-only mode ── */
     body.view-only #nav-add,
     body.view-only #nav-report,
@@ -457,6 +472,11 @@
       <div class="subtitle">Ormond by the Sea · Al Weeks → Verona</div>
     </div>
   </header>
+
+  <div id="offline-banner">
+    <strong>⚠️ Can't reach the nest database</strong>
+    <span id="offline-banner-detail">The map is empty because nothing could load — this is not "no nests." Adding and editing are disabled until the connection is back.</span>
+  </div>
 
   <!-- MAP TAB -->
   <div id="tab-map" class="tab-panel active">
@@ -1687,6 +1707,21 @@ async function deleteNest(id) {
 // ─────────────────────────────────────────────
 // LOAD
 // ─────────────────────────────────────────────
+// Show a persistent banner when the backend can't be reached. Without this an
+// unreachable database is indistinguishable from a beach with no nests on it.
+function setOffline(isOffline, error) {
+  document.body.classList.toggle('offline', isOffline);
+  document.getElementById('offline-banner').classList.toggle('visible', isOffline);
+  if (!isOffline) return;
+
+  // "Failed to fetch" means DNS/network — the project itself is unreachable
+  // (e.g. a paused or deleted Supabase project), not a bad query.
+  const unreachable = /failed to fetch|networkerror|load failed/i.test(error?.message || '');
+  document.getElementById('offline-banner-detail').textContent = unreachable
+    ? 'The map is empty because nothing could load — this is not "no nests." Adding and editing are disabled until the connection is back.'
+    : `The database rejected the request: ${error?.message || 'unknown error'}. Adding and editing are disabled.`;
+}
+
 async function loadNests() {
   const { data, error } = await db
     .from('turtle_nests')
@@ -1697,10 +1732,12 @@ async function loadNests() {
 
   if (error) {
     console.error(error);
-    showToast('⚠️ Could not load nests — check your Supabase config');
+    setOffline(true, error);
+    showToast('⚠️ Could not load nests — database unreachable');
     return;
   }
 
+  setOffline(false);
   nests = data || [];
   nests.forEach(addMarker);
   renderList();
