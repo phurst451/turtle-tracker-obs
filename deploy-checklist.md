@@ -1,90 +1,88 @@
-# Deploy Checklist — Ormond Turtle Nest Log
+# Deploy & Recovery Checklist — Ormond Turtle Nest Log
 
-## Step 1 — Rotate your Supabase service role key (DO THIS FIRST)
-1. Go to https://supabase.com → your project
-2. Settings → API
-3. Under "Service role key" → click Reveal → click "Generate new key"
-4. Copy and store the new key somewhere safe (you won't need it in the app)
+_Rewritten 2026-07-28. The previous version described a Vercel deploy of `turtle-nest-log.html` with a placeholder anon key — none of that matches how this app is actually hosted._
 
 ---
 
-## Step 2 — Get your anon key
-1. Same page: Settings → API
-2. Copy the **anon / public** key (starts with `eyJ...`)
+## A. Routine deploy (the normal case)
 
----
+The live site is **https://turtle-tracker-obs.netlify.app/**, a Netlify **drag-and-drop** site. It is **not** connected to the GitHub repo.
 
-## Step 3 — Paste the anon key into the HTML
-Open `turtle-nest-log.html` and find this line near the top of the `<script>` block:
+> **`git push` does not deploy.** Pushing only updates GitHub. This is how the live site sat 3 commits behind for a month.
 
-```js
-const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY_HERE';  // ← replace this
+### Option 1 — manual (works today)
+1. `./deploy.sh "what changed"` — commits, pushes, and opens Finder with `index.html` selected
+2. Drag `index.html` onto the Deploys tab: https://app.netlify.com/sites/turtle-tracker-obs/deploys
+3. Hard-refresh the live URL and confirm the change is actually there
+
+### Option 2 — one-time setup, then it's automatic
+```bash
+npm i -g netlify-cli && netlify link
 ```
-
-Replace `YOUR_ANON_KEY_HERE` with your actual anon key.
-
----
-
-## Step 4 — Run the Supabase SQL
-1. Go to your Supabase project → **SQL Editor** → **New query**
-2. Open `supabase-setup.sql` and paste the entire contents
-3. Click **Run**
-4. You should see "Success" with no errors
+After that `./deploy.sh "what changed"` commits, pushes, **and** publishes in one step.
 
 ---
 
-## Step 5 — Create the photo storage bucket (if SQL didn't do it)
-If the storage INSERT in the SQL errored (it sometimes requires the UI):
-1. Go to **Storage** → **New bucket**
-2. Name: `nest-photos`
-3. Toggle **Public** to ON
-4. Click **Create bucket**
-5. Then go to **Policies** → add policies for SELECT, INSERT, DELETE using the "All users" / anon template
+## B. Recovering a paused / deleted Supabase project
+
+Free-tier Supabase projects pause after ~7 days of inactivity, and a paused project's subdomain stops resolving (NXDOMAIN). Symptom: the app loads, the map draws, and there are **zero nests**, with a red "Can't reach the nest database" banner.
+
+**Check which case you're in:**
+```bash
+dig +short limdyowwnlleyyswwkeo.supabase.co
+```
+Empty output = the host is gone.
+
+### If it's only paused
+1. https://supabase.com/dashboard → project `turtle-tracker` → **Restore**
+2. Wait for it to come up, then re-run the `dig` above until it returns an address
+3. Reload the app — the banner should clear on its own
+
+### If it was deleted — rebuild
+1. Create a new Supabase project
+2. **SQL Editor → New query** → paste all of `supabase-setup.sql` → **Run**
+   - This now includes `hatch_date`, `num_hatchlings`, `whole_eggs_remaining` and the **UPDATE** policy the edit form needs
+3. **Storage** → confirm a public bucket named `nest-photos` exists (the SQL creates it; the UI sometimes needs to do it instead)
+4. **Settings → API** → copy the **anon / public** key
+5. Update both places that hardcode the project:
+   - `index.html`, near the top of the `<script>` block (~line 660): `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+   - `make_nest_report.py` (~line 10): `SUPABASE_URL`, `ANON_KEY`
+6. Deploy per section A
+7. Re-enter the nests. `Turtle_Nest_Log.xlsx` lists 14 nests as of 2026-06-16 with nest #, nearest street, date found and hatch window — but **no coordinates, species, or notes**, so pins have to be re-placed by hand.
 
 ---
 
-## Step 6 — Deploy to Vercel
-Vercel handles a single HTML file with zero config.
+## C. Keeping it from pausing again
 
-### Option A: Drag-and-drop (easiest)
-1. Go to https://vercel.com → Log in (or sign up free)
-2. Click **Add New → Project**
-3. Choose **"Deploy from file upload"** (or drag the HTML file)
-4. Drop `turtle-nest-log.html` into the upload zone
-5. Click **Deploy** — you'll get a URL like `turtle-nest-log.vercel.app`
-
-### Option B: GitHub (recommended for updates)
-1. Create a free GitHub account if you don't have one
-2. Create a new repo called `turtle-nest-log`
-3. Upload `turtle-nest-log.html` to the repo
-4. Go to https://vercel.com → **Add New → Project** → **Import Git Repository**
-5. Select your repo → click **Deploy**
-6. Future updates: just edit the file on GitHub → Vercel auto-redeploys in ~30 seconds
+Any DB request resets the 7-day inactivity timer. A weekly cron is enough:
+```bash
+curl -s -o /dev/null -H "apikey: $TURTLE_ANON_KEY" \
+  "https://YOUR-PROJECT.supabase.co/rest/v1/turtle_nests?select=id&limit=1"
+```
+Better still, make that same job dump the table to a dated JSON file — right now the nest data has **no backup anywhere**.
 
 ---
 
-## Step 7 — Test it
-1. Open your Vercel URL on your phone
-2. Tap the **+** FAB on the map
-3. Tap somewhere on the beach to place a pin
-4. Fill in the form and save
-5. The nest should appear on the map with a countdown and in the Nests list
-6. Tap "Share Card" to generate the Facebook-ready card
+## D. Smoke test after any deploy
 
----
-
-## Sharing tip
-The Share Card is designed for screenshots. When you tap "📸 Screenshot to share":
-- On iPhone: press Side Button + Volume Up
-- On Android: press Power + Volume Down
-Then share the screenshot to your neighborhood Facebook group!
+1. Open the live URL on a phone
+2. Confirm **no** red banner and that existing nests appear on the map
+3. Tap **＋** → allow location → pin drops at your spot
+4. Save a test nest with a photo → appears on map and in the Nests list
+5. Tap its marker → detail card → **Edit** → change the notes, replace the photo → **Save Changes** → confirm it sticks after a reload
+   _(If edits silently do nothing, the UPDATE RLS policy is missing — section B step 2.)_
+6. Delete the test nest from the edit form → confirm it disappears
+7. Open `?view` on the URL → add/edit/report controls should be hidden
 
 ---
 
 ## Troubleshooting
+
 | Problem | Fix |
 |---|---|
-| "Could not load nests" toast | Check the anon key is pasted correctly in the HTML |
-| Photo upload fails | Confirm the `nest-photos` bucket exists and is set to Public |
-| Map is blank | Check internet connection — map tiles load from ESRI |
-| Nest doesn't save | Open browser DevTools → Console for the error message |
+| Red "Can't reach the nest database" banner | Section B — project is paused or deleted |
+| Live site missing a change you made | You pushed but never dragged to Netlify — section A |
+| Edits appear to save but revert on reload | Missing UPDATE policy on `turtle_nests` |
+| Photo upload fails | `nest-photos` bucket missing, not public, or missing INSERT policy |
+| Map blank but UI fine | ESRI tile fetch failed — check connectivity |
+| Nest won't save | DevTools → Console for the Supabase error |
