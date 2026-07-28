@@ -1495,29 +1495,34 @@ async function saveEdit() {
   }
 }
 
-async function deleteNest() {
-  const nest = nests.find(n => n.id === editingId);
+// Called two ways: from a list card as deleteNest(id), and from the edit
+// overlay as deleteNest() — where the target is whichever nest is open.
+async function deleteNest(id) {
+  const fromEdit = !id;
+  const targetId = id || editingId;
+  const nest = nests.find(n => n.id === targetId);
   if (!nest) return;
   if (!confirm(`Delete ${nest.nest_number}? This cannot be undone.`)) return;
 
   const btn = document.getElementById('btn-edit-delete');
-  btn.disabled = true; btn.textContent = 'Deleting…';
+  if (fromEdit) { btn.disabled = true; btn.textContent = 'Deleting…'; }
 
   try {
-    const { error } = await db.from('turtle_nests').delete().eq('id', editingId);
+    const { error } = await db.from('turtle_nests').delete().eq('id', targetId);
     if (error) throw error;
 
     // Remove marker from map
-    if (markers[editingId]) { markers[editingId].remove(); delete markers[editingId]; }
+    if (markers[targetId]) { markers[targetId].remove(); delete markers[targetId]; }
     // Remove from local array
-    const idx = nests.findIndex(n => n.id === editingId);
+    const idx = nests.findIndex(n => n.id === targetId);
     if (idx !== -1) nests.splice(idx, 1);
-    closeEdit();
+    if (fromEdit) closeEdit();
     renderList();
     showToast('🗑 Nest deleted');
   } catch (err) {
     showToast('❌ ' + (err.message || 'Delete failed'));
-    btn.disabled = false; btn.textContent = '🗑 Delete Nest';
+  } finally {
+    if (fromEdit) { btn.disabled = false; btn.textContent = '🗑 Delete Nest'; }
   }
 }
 
@@ -1694,16 +1699,6 @@ function closeShare() {
 // ─────────────────────────────────────────────
 // DELETE
 // ─────────────────────────────────────────────
-async function deleteNest(id) {
-  if (!confirm('Delete this nest record?')) return;
-  const { error } = await db.from('turtle_nests').delete().eq('id', id);
-  if (error) { showToast('❌ ' + error.message); return; }
-  nests = nests.filter(n => n.id !== id);
-  if (markers[id]) { markers[id].remove(); delete markers[id]; }
-  renderList();
-  showToast('Nest deleted');
-}
-
 // ─────────────────────────────────────────────
 // LOAD
 // ─────────────────────────────────────────────
