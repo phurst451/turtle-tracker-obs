@@ -17,7 +17,9 @@ It is now **back up**: 27 nests (25 loggerhead, 1 green, 1 false crawl), date ra
 ## Live URL
 **https://turtle-tracker-obs.netlify.app/**
 
-⚠️ **Netlify is a drag-and-drop site — it is NOT connected to the GitHub repo.** `git push` does **not** update the live site. This is how production silently fell 3 commits behind between 2026-06-29 and 2026-07-28. Deploy by dragging `index.html` onto https://app.netlify.com/sites/turtle-tracker-obs/deploys, or install the Netlify CLI (`npm i -g netlify-cli && netlify link`) and let `./deploy.sh` do it.
+⚠️ **Netlify is NOT connected to the GitHub repo.** `git push` does **not** update the live site — that's how production silently fell 3 commits behind between 2026-06-29 and 2026-07-28.
+
+The Netlify CLI is now installed and logged in, so `./deploy.sh "what changed"` commits, pushes and publishes in one step. **Deployed 2026-07-28** — the live site is current as of commit `b93ce0b`. Note `deploy.sh` publishes a temp dir holding only `index.html`; deploying `--dir .` would expose the xlsx, the report script and these docs publicly.
 
 ## Architecture
 Single self-contained HTML file — no build step, no framework, nothing to install.

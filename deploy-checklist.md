@@ -10,16 +10,17 @@ The live site is **https://turtle-tracker-obs.netlify.app/**, a Netlify **drag-a
 
 > **`git push` does not deploy.** Pushing only updates GitHub. This is how the live site sat 3 commits behind for a month.
 
-### Option 1 — manual (works today)
-1. `./deploy.sh "what changed"` — commits, pushes, and opens Finder with `index.html` selected
-2. Drag `index.html` onto the Deploys tab: https://app.netlify.com/sites/turtle-tracker-obs/deploys
-3. Hard-refresh the live URL and confirm the change is actually there
-
-### Option 2 — one-time setup, then it's automatic
+### ✅ The Netlify CLI is installed and logged in as `phurst451` (as of 2026-07-28)
+So a deploy is now one command:
 ```bash
-npm i -g netlify-cli && netlify link
+./deploy.sh "what changed"
 ```
-After that `./deploy.sh "what changed"` commits, pushes, **and** publishes in one step.
+That commits, pushes, **and** publishes. Hard-refresh the live URL afterwards and confirm the change is actually there.
+
+> **`deploy.sh` publishes a temp dir containing only `index.html` — never `--dir .`.** Deploying the repo root would put `Turtle_Nest_Log.xlsx` (all the nest data), `make_nest_report.py` and these internal docs on the public site.
+
+### Fallback — manual drag
+If the CLI is unavailable, drag `index.html` onto the Deploys tab: https://app.netlify.com/sites/turtle-tracker-obs/deploys
 
 ---
 

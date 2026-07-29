@@ -19,7 +19,13 @@ git push
 echo "✅ Pushed to GitHub"
 
 if command -v netlify >/dev/null 2>&1; then
-  netlify deploy --prod --dir .
+  # Publish a directory containing ONLY index.html. Never `--dir .` — that
+  # would put Turtle_Nest_Log.xlsx, make_nest_report.py and the internal
+  # docs on the public site.
+  pub=$(mktemp -d) || exit 1
+  trap 'rm -rf "$pub"' EXIT
+  cp index.html "$pub/"
+  netlify deploy --prod --dir "$pub" --message "$msg"
   echo "✅ Deployed to Netlify"
 else
   echo
