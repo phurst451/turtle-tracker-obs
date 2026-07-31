@@ -81,8 +81,15 @@ public.turtle_nests (
 - Share card for Facebook neighborhood groups
 - **Offline banner** — if the database can't be reached, a persistent red bar says so and disables adding, so an unreachable backend is never mistaken for "no nests"
 
-## Companion script
-`make_nest_report.py` pulls from Supabase and builds `Turtle_Nest_Log.xlsx` (photos, map thumbnails, nearest-street lookup). The committed `Turtle_Nest_Log.xlsx` is a **snapshot of 14 nests as of 2026-06-16** — useful as a partial reference, but it holds no coordinates, species, or notes, so it is **not** a restore source.
+## Companion scripts
+| Script | What it does |
+|---|---|
+| `backup.sh` | Twice-weekly launchd job — dumps the table to `~/turtle-nest-backups/`, pulls down photos, and keeps the project from idling into a pause. Deploy-checklist §C. |
+| `restore.sh` | Reverses it into a fresh project — re-uploads photos, repoints `photo_url`, reinserts nests with original ids. Dry run by default. Deploy-checklist §B. |
+| `deploy.sh` | Commit + push + publish `index.html` to Netlify. |
+| `make_nest_report.py` | Builds `Turtle_Nest_Log.xlsx` (photos, map thumbnails, nearest-street lookup). |
+
+The committed `Turtle_Nest_Log.xlsx` is a **snapshot of 14 nests as of 2026-06-16** — a partial reference only. It holds no coordinates, species, or notes, so it is **not** a restore source; use a `backup.sh` snapshot.
 
 ## Known Issues / To-Do
 - ~~The live DB is missing `hatch_date`, `num_hatchlings`, `whole_eggs_remaining`.~~ **Fixed 2026-07-29** — `migration-add-hatch-outcome-columns.sql` was run in the SQL Editor. Verified end to end afterwards: opened a real nest in the edit form, set all three fields, hit Save → "✅ Nest updated!", values confirmed persisted via the REST API, then restored to their original state (row byte-identical to the pre-test snapshot). Photo upload to the `nest-photos` bucket verified separately. The edit form now works; it never had against this project before.

@@ -49,7 +49,9 @@ Empty output = the host is gone.
    - `index.html`, near the top of the `<script>` block (~line 660): `SUPABASE_URL`, `SUPABASE_ANON_KEY`
    - `make_nest_report.py` (~line 10): `SUPABASE_URL`, `ANON_KEY`
 6. Deploy per section A
-7. Re-enter the nests. `Turtle_Nest_Log.xlsx` lists 14 nests as of 2026-06-16 with nest #, nearest street, date found and hatch window — but **no coordinates, species, or notes**, so pins have to be re-placed by hand.
+7. **Restore the data** — `./restore.sh` (dry run first, then `./restore.sh --execute`). It re-uploads every photo, repoints `photo_url` at the new project, and reinserts the nests with their original ids and timestamps. Into a fresh empty project no `--force` is needed.
+
+   _(The old advice to re-key everything from `Turtle_Nest_Log.xlsx` is obsolete — that file has no coordinates, species or notes. Use a backup snapshot.)_
 
 ---
 
@@ -83,17 +85,25 @@ cp com.phillip.turtle-backup.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.phillip.turtle-backup.plist
 ```
 
-### Restoring from a backup
-The JSON is the full table — every column, including coordinates. To reload it into a fresh project after running `supabase-setup.sql`:
+### Restoring from a backup — `restore.sh`
+
+Reverses `backup.sh`: re-uploads the photos, rewrites every `photo_url` to the target project, and reinserts the nests with original ids and `created_at` preserved.
+
+It reads the **target** project from `index.html`, same as `backup.sh`. So point the app at the new project *first*:
+
 ```bash
-URL=$(sed -n "s/.*const SUPABASE_URL[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" index.html | head -1)
-KEY=$(sed -n "s/.*const SUPABASE_ANON_KEY[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" index.html | head -1)
-curl -X POST "$URL/rest/v1/turtle_nests" \
-  -H "apikey: $KEY" -H "Authorization: Bearer $KEY" \
-  -H "Content-Type: application/json" \
-  --data-binary @~/turtle-nest-backups/nests-YYYY-MM-DD.json
+./restore.sh                    # dry run — newest snapshot, writes nothing
+./restore.sh --snapshot ~/turtle-nest-backups/nests-2026-07-29.json
+./restore.sh --execute          # do it (fresh empty project — no --force needed)
+./restore.sh --execute --force  # ...even if the table already has rows
 ```
-Photos would need re-uploading to the `nest-photos` bucket and the `photo_url` values rewritten to the new project's domain.
+
+- **Dry run by default.** Nothing is written without `--execute`.
+- **Refuses a non-empty table** unless `--force`, since rows are upserted by `id` and would overwrite anything sharing one.
+- **Idempotent** — photos upsert, rows upsert on `id`. Re-running is safe.
+- A nest whose photo is missing from the backup restores with `photo_url = null` rather than a dead link, and is listed in the output.
+
+Verified 2026-07-31: dry run, the non-empty refusal, the URL rewrite (including the missing-photo branch), photo upload to the bucket, and the `on_conflict=id` upsert were each exercised against the live project. The one path not run start-to-finish is `--execute --force`, which would have meant overwriting live rows to prove a no-op.
 
 ---
 
