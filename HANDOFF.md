@@ -85,7 +85,7 @@ public.turtle_nests (
 `make_nest_report.py` pulls from Supabase and builds `Turtle_Nest_Log.xlsx` (photos, map thumbnails, nearest-street lookup). The committed `Turtle_Nest_Log.xlsx` is a **snapshot of 14 nests as of 2026-06-16** — useful as a partial reference, but it holds no coordinates, species, or notes, so it is **not** a restore source.
 
 ## Known Issues / To-Do
-- ⚠️ **The live DB is missing `hatch_date`, `num_hatchlings`, `whole_eggs_remaining`** — the edit form writes them, PostgREST returns `42703 column does not exist`, so **Save Changes in the edit form has never worked** against this project. Fix: run `migration-add-hatch-outcome-columns.sql` in the Supabase SQL Editor. Verified against the live DB 2026-07-28.
+- ~~The live DB is missing `hatch_date`, `num_hatchlings`, `whole_eggs_remaining`.~~ **Fixed 2026-07-29** — `migration-add-hatch-outcome-columns.sql` was run in the SQL Editor. Verified end to end afterwards: opened a real nest in the edit form, set all three fields, hit Save → "✅ Nest updated!", values confirmed persisted via the REST API, then restored to their original state (row byte-identical to the pre-test snapshot). Photo upload to the `nest-photos` bucket verified separately. The edit form now works; it never had against this project before.
 - ~~No backup of the nest data.~~ **Solved 2026-07-28** — `backup.sh` on a launchd schedule (Sun + Wed) dumps the table to `~/turtle-nest-backups/` and pulls down photos, and the same request keeps the project from pausing. See deploy-checklist §C.
 - Storage RLS on `nest-photos` allows public INSERT/DELETE — fine for trusted community use, worth tightening if it goes wider
 - No authentication (intentional — all monitors share one view)
