@@ -127,7 +127,7 @@ Verified 2026-07-31: dry run, the non-empty refusal, the URL rewrite (including 
 | Problem | Fix |
 |---|---|
 | Red "Can't reach the nest database" banner | Section B — project is paused or deleted |
-| Live site missing a change you made | You pushed but never dragged to Netlify — section A |
+| Live site missing a change you made | The CD build failed or hasn't landed — check the Deploys tab. `deploy.sh` waits for it and fails loudly if it errors. |
 | Edits appear to save but revert on reload | Missing UPDATE policy on `turtle_nests` |
 | Photo upload fails | `nest-photos` bucket missing, not public, or missing INSERT policy |
 | Map blank but UI fine | ESRI tile fetch failed — check connectivity |
