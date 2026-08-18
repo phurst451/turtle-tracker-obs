@@ -5,10 +5,10 @@
 # rewrites every photo_url to point at the target project, and inserts the
 # rows with their original ids and created_at timestamps preserved.
 #
-# Reads the TARGET project from index.html, same as backup.sh — so the
+# Reads the TARGET project from $APP, same as backup.sh — so the
 # intended order after losing a project is:
 #   1. create the new project, run supabase-setup.sql
-#   2. update SUPABASE_URL / SUPABASE_ANON_KEY in index.html
+#   2. update SUPABASE_URL / SUPABASE_ANON_KEY in site/index.html
 #   3. ./restore.sh --execute
 #
 # Dry run by default. Nothing is written until you pass --execute.
@@ -20,6 +20,11 @@
 
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
+
+# The app itself. It lives in site/ because that directory is the entire
+# publish surface (see netlify.toml) — it is also the single source of truth
+# for the Supabase URL and anon key, which are read out of it below.
+APP=site/index.html
 
 CURL=/usr/bin/curl
 JQ=/usr/bin/jq
@@ -51,9 +56,9 @@ PHOTO_DIR="$(dirname "$SNAPSHOT")/photos"
 ROWS=$("$JQ" 'length' "$SNAPSHOT")
 
 # ── Target project, read from the app ────────────────────────────
-URL=$(sed -n "s/.*const SUPABASE_URL[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" index.html | head -1)
-KEY=$(sed -n "s/.*const SUPABASE_ANON_KEY[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" index.html | head -1)
-[[ -n "$URL" && -n "$KEY" ]] || die "could not read SUPABASE_URL / SUPABASE_ANON_KEY from index.html"
+URL=$(sed -n "s/.*const SUPABASE_URL[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" "$APP" | head -1)
+KEY=$(sed -n "s/.*const SUPABASE_ANON_KEY[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" "$APP" | head -1)
+[[ -n "$URL" && -n "$KEY" ]] || die "could not read SUPABASE_URL / SUPABASE_ANON_KEY from $APP"
 
 AUTH=(-H "apikey: $KEY" -H "Authorization: Bearer $KEY")
 

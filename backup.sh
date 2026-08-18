@@ -8,7 +8,7 @@
 #   2. Any request resets Supabase's ~7-day free-tier inactivity timer. That
 #      timer is what paused the project and took the app down in July 2026.
 #
-# Credentials are read out of index.html so there is a single source of truth:
+# Credentials are read out of $APP so there is a single source of truth:
 # restore or recreate the Supabase project, update the app, and this follows.
 #
 # Run by ~/Library/LaunchAgents/com.phillip.turtle-backup.plist.
@@ -16,6 +16,11 @@
 
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
+
+# The app itself. It lives in site/ because that directory is the entire
+# publish surface (see netlify.toml) — it is also the single source of truth
+# for the Supabase URL and anon key, which are read out of it below.
+APP=site/index.html
 
 # launchd gives us a minimal PATH, so call these by absolute path.
 CURL=/usr/bin/curl
@@ -37,11 +42,11 @@ say() { printf '%s\n' "$*"; log "$*"; }
 say "── backup run starting ──"
 
 # ── Read Supabase config from the app ────────────────────────────
-URL=$(sed -n "s/.*const SUPABASE_URL[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" index.html | head -1)
-KEY=$(sed -n "s/.*const SUPABASE_ANON_KEY[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" index.html | head -1)
+URL=$(sed -n "s/.*const SUPABASE_URL[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" "$APP" | head -1)
+KEY=$(sed -n "s/.*const SUPABASE_ANON_KEY[[:space:]]*=[[:space:]]*'\([^']*\)'.*/\1/p" "$APP" | head -1)
 
 if [[ -z "$URL" || -z "$KEY" ]]; then
-  say "FAIL: could not read SUPABASE_URL / SUPABASE_ANON_KEY from index.html"
+  say "FAIL: could not read SUPABASE_URL / SUPABASE_ANON_KEY from $APP"
   exit 1
 fi
 

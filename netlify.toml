@@ -1,0 +1,15 @@
+# Publish surface for turtle-tracker-obs.
+#
+# This site builds from GitHub on every push to main (Netlify's GitHub
+# integration — see build_settings.provider). The publish directory was set to
+# the repo root in the Netlify UI, which meant every CD build put the whole
+# repo on the public site: Turtle_Nest_Log.xlsx (the full nest dataset with
+# exact GPS of protected nests), both .sql files, every script and all the
+# internal docs. That was live from 2026-07-31 to 2026-08-18.
+#
+# A committed netlify.toml overrides the UI setting, so the fix travels with
+# the repo instead of living invisibly in someone's browser. `site/` holds
+# exactly one file: index.html. Nothing else is publishable — to add an asset
+# to the live site, put it in site/.
+[build]
+  publish = "site"
