@@ -10,16 +10,18 @@ Earlier on 2026-07-28 `limdyowwnlleyyswwkeo.supabase.co` returned **NXDOMAIN** �
 
 It is now **back up**: 27 nests (25 loggerhead, 1 green, 1 false crawl), date range 2026-05-01 → 2026-06-29, all with coordinates, 22 photos.
 
-**If it happens again:** https://supabase.com/dashboard → project `turtle-tracker` → **Restore**. Check with `dig +short limdyowwnlleyyswwkeo.supabase.co` — empty output means the host is gone. If it was deleted rather than paused, recreate it, run `supabase-setup.sql`, then update `SUPABASE_URL` / `SUPABASE_ANON_KEY` in `index.html` (~line 660) and `make_nest_report.py`.
+**If it happens again:** https://supabase.com/dashboard → project `turtle-tracker` → **Restore**. Check with `dig +short limdyowwnlleyyswwkeo.supabase.co` — empty output means the host is gone. If it was deleted rather than paused, recreate it, run `supabase-setup.sql`, then update `SUPABASE_URL` / `SUPABASE_ANON_KEY` in `site/index.html` (~line 660) and `make_nest_report.py`.
 
-**It should not happen again** — the twice-weekly `backup.sh` job now keeps the inactivity clock reset (deploy-checklist §C).
+**It happened again on 2026-08-16**, and the twice-weekly `backup.sh` job did *not* prevent it. The job ran on schedule throughout (Jul 29 → Aug 16, never a gap over 4 days) and Supabase paused the project anyway, citing ">7 days of inactivity". **Plain PostgREST reads do not count as activity.** Treat pausing as recurring: the backups are reliable, the keep-alive is not. Supabase emails a warning ~1 day ahead — those notices are currently landing in Trash unread, which is worth fixing.
 
 ## Live URL
 **https://turtle-tracker-obs.netlify.app/**
 
-⚠️ **Netlify is NOT connected to the GitHub repo.** `git push` does **not** update the live site — that's how production silently fell 3 commits behind between 2026-06-29 and 2026-07-28.
+⚠️ **Netlify IS connected to the GitHub repo — `git push` deploys.** (This section said the opposite until 2026-08-18, and that error leaked the whole repo for 18 days; see "Publish surface" below.) Every push to `main` triggers a build. What gets published is pinned by the committed `netlify.toml` → `publish = "site"`.
 
-The Netlify CLI is now installed and logged in, so `./deploy.sh "what changed"` commits, pushes and publishes in one step. **Deployed 2026-07-28** — the live site is current as of commit `b93ce0b`. Note `deploy.sh` publishes a temp dir holding only `index.html`; deploying `--dir .` would expose the xlsx, the report script and these docs publicly.
+`./deploy.sh "what changed"` commits `site/index.html`, pushes, waits for that commit's build to reach `ready`, then verifies the live app matches local **and** 404-checks every repo file. Do not hand-run `netlify deploy` — a manual deploy is just a second deploy that the next CD build overwrites.
+
+**Publish surface.** `site/` is the entire publish surface and holds exactly one file, `index.html`. Anything you put in `site/` becomes public; anything outside it cannot reach the live site. From 2026-07-31 to 2026-08-18 the publish directory was the repo root, so `Turtle_Nest_Log.xlsx` (every nest, exact GPS), both `.sql` files, all scripts and all internal docs were publicly downloadable. The trap was subtle: `deploy.sh` did a clean `--dir` deploy, the 404 check passed, and then its own `git push` triggered a repo-root CD build three minutes later that put everything back. Always verify **after** the CD build lands. **Deployed 2026-08-18**, commit `d11f379`; surface verified clean.
 
 ## Architecture
 Single self-contained HTML file — no build step, no framework, nothing to install.
@@ -32,7 +34,7 @@ Single self-contained HTML file — no build step, no framework, nothing to inst
 - **Project name:** turtle-tracker
 - **URL:** `https://limdyowwnlleyyswwkeo.supabase.co` ← currently NXDOMAIN
 - **Dashboard:** https://supabase.com/dashboard/project/limdyowwnlleyyswwkeo
-- **Anon key:** the live key is the `eyJ…` JWT hardcoded in `index.html`. An `sb_publishable_GMO9je…` key is also floating around in old notes — both are for this same dead project. Whichever survives the restore, make sure `index.html` and `make_nest_report.py` agree.
+- **Anon key:** the live key is the `eyJ…` JWT hardcoded in `site/index.html`. An `sb_publishable_GMO9je…` key is also floating around in old notes — both are for this same dead project. Whichever survives the restore, make sure `site/index.html` and `make_nest_report.py` agree.
 
 ### Database schema
 ```sql
@@ -86,7 +88,7 @@ public.turtle_nests (
 |---|---|
 | `backup.sh` | Twice-weekly launchd job — dumps the table to `~/turtle-nest-backups/`, pulls down photos, and keeps the project from idling into a pause. Deploy-checklist §C. |
 | `restore.sh` | Reverses it into a fresh project — re-uploads photos, repoints `photo_url`, reinserts nests with original ids. Dry run by default. Deploy-checklist §B. |
-| `deploy.sh` | Commit + push + publish `index.html` to Netlify. |
+| `deploy.sh` | Commit + push `site/index.html`; wait for the CD build, then verify the publish surface. |
 | `make_nest_report.py` | Builds `Turtle_Nest_Log.xlsx` (photos, map thumbnails, nearest-street lookup). |
 
 The committed `Turtle_Nest_Log.xlsx` is a **snapshot of 14 nests as of 2026-06-16** — a partial reference only. It holds no coordinates, species, or notes, so it is **not** a restore source; use a `backup.sh` snapshot.

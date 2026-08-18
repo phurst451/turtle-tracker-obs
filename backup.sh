@@ -1,12 +1,17 @@
 #!/bin/bash
-# Turtle Nest Log — data backup + keep-alive.
+# Turtle Nest Log — data backup.
 #
 # Does two jobs at once:
 #   1. Dumps public.turtle_nests to a dated JSON file, and downloads any nest
 #      photos not already saved. Until now this data existed in exactly one
 #      free-tier Supabase project and nowhere else.
-#   2. Any request resets Supabase's ~7-day free-tier inactivity timer. That
-#      timer is what paused the project and took the app down in July 2026.
+#   2. It used to claim it also kept the project awake, on the theory that any
+#      request resets Supabase's ~7-day free-tier inactivity timer. THAT IS
+#      FALSE. This job ran Jul 29, 31, Aug 2, 5, 9, 12 and 16 — never a gap
+#      over 4 days — and Supabase still paused the project on 07-27 and again
+#      on 08-16 for ">7 days of inactivity". Plain PostgREST reads evidently
+#      do not count. Do not rely on this script to prevent a pause; its job is
+#      the backup. Expect to un-pause from the dashboard periodically.
 #
 # Credentials are read out of $APP so there is a single source of truth:
 # restore or recreate the Supabase project, update the app, and this follows.

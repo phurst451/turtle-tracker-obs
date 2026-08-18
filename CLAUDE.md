@@ -45,7 +45,7 @@ The Supabase URL and anon key are hardcoded near the top of the `<script>` block
 ## Current state (2026-08-18)
 27 nests (25 loggerhead, 1 green, 1 false crawl), 2026-05-01 → 06-29, all with coordinates; 22 photos. Edit form works (fixed 07-29). Backup job runs unattended and its snapshots are good.
 
-**Supabase is PAUSED** (since 2026-08-16 15:10 UTC) — the app cannot reach the database until Phillip un-pauses it from the dashboard. Last good snapshot: `~/turtle-nest-backups/nests-2026-08-16.json`, 27 nests.
+Supabase was paused 2026-08-16 15:10 UTC (that's the "can't reach the nest database" symptom) and is **back up as of 08-18** — verified reachable, 200, all 27 nests present, nothing lost. Fresh snapshot: `~/turtle-nest-backups/nests-2026-08-18.json`.
 
 Publish surface: repo restructured 08-18 so only `site/index.html` is publishable, and `Turtle_Nest_Log.xlsx` is no longer tracked in git.
 
@@ -53,7 +53,6 @@ Publish surface: repo restructured 08-18 so only `site/index.html` is publishabl
 - `2035 TV time`-style polish aside, the app is feature-complete for the season. Remaining ideas in `HANDOFF.md` → Suggested Next Features: filter by species/status, hatch-window notification, season stats, CSV export for FWC.
 - `restore.sh --execute --force` has never been run start-to-finish (every step verified individually; the forced overwrite was blocked as destructive).
 - Storage RLS allows public INSERT/DELETE on `nest-photos` — fine for a trusted group, worth tightening if the app goes wider.
-- **Un-pause Supabase** — Phillip only. Dashboard → project `limdyowwnlleyyswwkeo` → Restore. Then run `./backup.sh` and reload the app.
 - **The keep-alive doesn't work.** `backup.sh` reads the table twice a week and the project still paused twice. Either accept manual un-pausing as routine, or move off the free tier. Do not trust the "any request resets the timer" claim.
 - **Supabase mail is going to Trash unread** — including the "going to be paused" warning that arrives ~1 day ahead, and repeated "security vulnerabilities detected in your projects" notices (Jul 21, Aug 11, Aug 18). Worth a filter that keeps them in the inbox, and worth actually reading the security ones.
 - **The Netlify UI publish directory still says repo root.** It is now overridden by the committed `netlify.toml`, so it is no longer live-dangerous — but correcting it in the UI (Build & deploy → Publish directory → `site`) would remove the last copy of the setting that caused two leaks. Needs Phillip's login.

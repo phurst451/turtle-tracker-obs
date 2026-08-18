@@ -8,7 +8,7 @@ _Rewritten 2026-07-28. The previous version described a Vercel deploy of `turtle
 
 The live site is **https://turtle-tracker-obs.netlify.app/**, a Netlify **drag-and-drop** site. It is **not** connected to the GitHub repo.
 
-> **`git push` does not deploy.** Pushing only updates GitHub. This is how the live site sat 3 commits behind for a month.
+> **`git push` DOES deploy.** The site builds from GitHub on every push to `main`. This line said the opposite until 2026-08-18 — believing it is what kept an 18-day repo leak invisible.
 
 ### ✅ The Netlify CLI is installed and logged in as `phurst451` (as of 2026-07-28)
 So a deploy is now one command:
@@ -17,10 +17,10 @@ So a deploy is now one command:
 ```
 That commits, pushes, **and** publishes. Hard-refresh the live URL afterwards and confirm the change is actually there.
 
-> **`deploy.sh` publishes a temp dir containing only `index.html` — never `--dir .`.** Deploying the repo root would put `Turtle_Nest_Log.xlsx` (all the nest data), `make_nest_report.py` and these internal docs on the public site.
+> **`site/` is the whole publish surface**, pinned by the committed `netlify.toml`. Never put anything in `site/` that isn't meant to be public, and never hand-run `netlify deploy` — a manual deploy is only overwritten by the next CD build. `deploy.sh` verifies the surface after the build lands; a 404 check run before it means nothing.
 
 ### Fallback — manual drag
-If the CLI is unavailable, drag `index.html` onto the Deploys tab: https://app.netlify.com/sites/turtle-tracker-obs/deploys
+If the build doesn't fire, check the Deploys tab: https://app.netlify.com/sites/turtle-tracker-obs/deploys — do **not** fall back to a drag-and-drop or `--dir` deploy, which the next push will overwrite.
 
 ---
 
@@ -46,7 +46,7 @@ Empty output = the host is gone.
 3. **Storage** → confirm a public bucket named `nest-photos` exists (the SQL creates it; the UI sometimes needs to do it instead)
 4. **Settings → API** → copy the **anon / public** key
 5. Update both places that hardcode the project:
-   - `index.html`, near the top of the `<script>` block (~line 660): `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+   - `site/index.html`, near the top of the `<script>` block (~line 660): `SUPABASE_URL`, `SUPABASE_ANON_KEY`
    - `make_nest_report.py` (~line 10): `SUPABASE_URL`, `ANON_KEY`
 6. Deploy per section A
 7. **Restore the data** — `./restore.sh` (dry run first, then `./restore.sh --execute`). It re-uploads every photo, repoints `photo_url` at the new project, and reinserts the nests with their original ids and timestamps. Into a fresh empty project no `--force` is needed.
@@ -55,13 +55,15 @@ Empty output = the host is gone.
 
 ---
 
-## C. Automatic backup + keep-alive — **installed 2026-07-28**
+## C. Automatic backup — **installed 2026-07-28**
 
-`backup.sh` runs on a launchd schedule and does both jobs at once: it dumps `turtle_nests` to a dated JSON file and downloads any new nest photos, and the request itself resets Supabase's ~7-day inactivity timer.
+`backup.sh` runs on a launchd schedule: it dumps `turtle_nests` to a dated JSON file and downloads any new nest photos.
+
+> ⚠️ **It does not keep the project awake.** This section used to claim the request resets Supabase's inactivity timer. It doesn't — the job ran Jul 29 → Aug 16 2026 without a gap over 4 days and the project was paused twice anyway. Keep the job for the backups; expect to un-pause by hand.
 
 | | |
 |---|---|
-| Script | `backup.sh` (reads the Supabase URL + anon key straight out of `index.html`, so there's one source of truth) |
+| Script | `backup.sh` (reads the Supabase URL + anon key straight out of `site/index.html`, so there's one source of truth) |
 | Schedule | **Sunday and Wednesday, 11:00** — see note below |
 | Backups | `~/turtle-nest-backups/` — `nests-YYYY-MM-DD.json` + `photos/` |
 | Log | `~/turtle-nest-backups/backup.log` |
@@ -89,7 +91,7 @@ launchctl load ~/Library/LaunchAgents/com.phillip.turtle-backup.plist
 
 Reverses `backup.sh`: re-uploads the photos, rewrites every `photo_url` to the target project, and reinserts the nests with original ids and `created_at` preserved.
 
-It reads the **target** project from `index.html`, same as `backup.sh`. So point the app at the new project *first*:
+It reads the **target** project from `site/index.html`, same as `backup.sh`. So point the app at the new project *first*:
 
 ```bash
 ./restore.sh                    # dry run — newest snapshot, writes nothing
