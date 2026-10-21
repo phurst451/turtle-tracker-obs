@@ -43,6 +43,12 @@ The Supabase URL and anon key are hardcoded near the top of the `<script>` block
 - **`species` has four values** — `loggerhead`, `leatherback`, `green`, and `false_crawl` (came ashore, laid nothing). False crawls have no hatch window and render as "FC".
 
 ## Current state (2026-08-18)
+
+*Last reconciled: 2026-10-21.*
+**Just done:** Supabase confirmed back up after the 08-16 pause: all 27 nests present, fresh backup snapshot (08-18).
+**Next step:** none recorded as pending in this file; read the dated notes below before starting.
+**Blocker:** none
+
 27 nests (25 loggerhead, 1 green, 1 false crawl), 2026-05-01 → 06-29, all with coordinates; 22 photos. Edit form works (fixed 07-29). Backup job runs unattended and its snapshots are good.
 
 Supabase was paused 2026-08-16 15:10 UTC (that's the "can't reach the nest database" symptom) and is **back up as of 08-18** — verified reachable, 200, all 27 nests present, nothing lost. Fresh snapshot: `~/turtle-nest-backups/nests-2026-08-18.json`.
