@@ -5,7 +5,7 @@ Mobile-first sea turtle nest tracker for volunteer monitors on the beach from Al
 ## ⚠️ Read first
 **`HANDOFF.md` is the source of truth** — architecture, schema, full feature list, known issues. **`deploy-checklist.md`** is the operational runbook: deploying, recovering a paused project, the backup job, and the post-deploy smoke test. Read those before acting.
 
-**This is a separate repo from `personal-tools`,** even though it sits inside that folder. Its own remote: `github.com/phurst451/turtle-tracker-obs`. Nothing here belongs to the Home Assistant work next door.
+**This is a separate repo from `personal-tools`,** and since 2026-10-21 lives at `~/Developer/personal-turtle-tracker` (it was nested inside `personal-tools`). Its own remote: `github.com/phurst451/turtle-tracker-obs`. Nothing here belongs to the Home Assistant work next door.
 
 ## What it is
 One self-contained `site/index.html` — no build step, no framework, no install. It lives in `site/` because that directory is the **entire publish surface** (pinned by `netlify.toml`); nothing outside it can reach the live site. Leaflet + ESRI satellite tiles, Supabase (Postgres + Storage), vanilla JS. CDN: `exifr` (GPS from photo EXIF), `heic2any` (iPhone HEIC→JPEG), `exceljs` (report export).

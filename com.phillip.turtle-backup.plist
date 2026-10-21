@@ -8,11 +8,11 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/PhillipHurst/Developer/personal-tools/turtle-tracker/backup.sh</string>
+    <string>/Users/PhillipHurst/Developer/personal-turtle-tracker/backup.sh</string>
   </array>
 
   <key>WorkingDirectory</key>
-  <string>/Users/PhillipHurst/Developer/personal-tools/turtle-tracker</string>
+  <string>/Users/PhillipHurst/Developer/personal-turtle-tracker</string>
 
   <!-- Sunday and Wednesday at 11:00.
 
